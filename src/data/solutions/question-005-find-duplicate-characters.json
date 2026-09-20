@@ -1,0 +1,54 @@
+{
+  "kotlin": [
+    {
+      "label": "Basic Solution",
+      "code": "fun findDuplicateCharacters(input: String): List<Char> {\n    val seen = mutableSetOf<Char>()\n    val duplicates = mutableListOf<Char>()\n    for (char in input) {\n        if (!seen.add(char) && char !in duplicates) duplicates.add(char)\n    }\n    return duplicates\n}",
+      "recommendation": "Best",
+      "note": "Best: this is the cleanest and most direct version, and it is usually the strongest first answer in an interview."
+    },
+    {
+      "label": "Alternative",
+      "code": "fun findDuplicateCharacters(input: String): List<Char> {\n    return input.groupingBy { it }.eachCount().filterValues { it > 1 }.keys.toList()\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: this keeps the core idea simple and readable without overcomplicating the logic."
+    },
+    {
+      "label": "Loop",
+      "code": "fun findDuplicateCharacters(input: String): List<Char> {\n    val counts = mutableMapOf<Char, Int>()\n    for (char in input) counts[char] = (counts[char] ?: 0) + 1\n    return input.filter { counts[it]!! > 1 }.distinct()\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: the explicit loop is easy to reason about, which makes it a strong backup when the interviewer wants to see every step."
+    },
+    {
+      "label": "Stream API",
+      "code": "fun findDuplicateCharacters(input: String): List<Char> {\n    return input.asSequence().groupingBy { it }.eachCount().filterValues { it > 1 }.keys.toList()\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: this is concise and elegant, but it is usually a second-choice answer unless the problem is clearly built for a collection pipeline."
+    }
+  ],
+  "java": [
+    {
+      "label": "Basic Solution",
+      "code": "public static List<Character> findDuplicateCharacters(String input) {\n    Set<Character> seen = new HashSet<>();\n    List<Character> duplicates = new ArrayList<>();\n    for (char c : input.toCharArray()) {\n        if (!seen.add(c) && !duplicates.contains(c)) duplicates.add(c);\n    }\n    return duplicates;\n}",
+      "recommendation": "Best",
+      "note": "Best: this is the cleanest and most direct version, and it is usually the strongest first answer in an interview."
+    },
+    {
+      "label": "Alternative",
+      "code": "public static List<Character> findDuplicateCharacters(String input) {\n    Map<Character, Integer> counts = new LinkedHashMap<>();\n    for (char c : input.toCharArray()) counts.put(c, counts.getOrDefault(c, 0) + 1);\n    List<Character> duplicates = new ArrayList<>();\n    for (char c : input.toCharArray()) if (counts.get(c) > 1 && !duplicates.contains(c)) duplicates.add(c);\n    return duplicates;\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: this keeps the core idea simple and readable without overcomplicating the logic."
+    },
+    {
+      "label": "Loop",
+      "code": "public static List<Character> findDuplicateCharacters(String input) {\n    List<Character> duplicates = new ArrayList<>();\n    for (int i = 0; i < input.length(); i++) {\n        char c = input.charAt(i);\n        if (input.indexOf(c) != input.lastIndexOf(c) && !duplicates.contains(c)) duplicates.add(c);\n    }\n    return duplicates;\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: the explicit loop is easy to reason about, which makes it a strong backup when the interviewer wants to see every step."
+    },
+    {
+      "label": "Stream API",
+      "code": "public static List<Character> findDuplicateCharacters(String input) {\n    Map<Character, Long> counts = input.chars().mapToObj(c -> (char) c).collect(Collectors.groupingBy(c -> c, LinkedHashMap::new, Collectors.counting()));\n    return input.chars().mapToObj(c -> (char) c).filter(c -> counts.get(c) > 1).distinct().collect(Collectors.toList());\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: this is concise and elegant, but it is usually a second-choice answer unless the problem is clearly built for a collection pipeline."
+    }
+  ]
+}

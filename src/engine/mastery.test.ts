@@ -1,5 +1,7 @@
+import { readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { getLearningFlow, getProblemExamples, getProblemHintsForLanguage, getProblemRecommendation, getProblemSolution, getProblemSolutions, getQuestionIndexByTopic, getSolutionComplexity, getSolutionFlow, getVariantNote, loadProblemSolutions, loadQuestionsByTopic, loadTopicIndex, problems, topicIndex, validateGeneratedSolutionCode } from '../data/roadmap';
+import { getSolutionFileName } from '../data/question-solution-loader';
 import { calculateMastery, getNextReviewDate } from './mastery';
 
 describe('calculateMastery', () => {
@@ -51,6 +53,19 @@ describe('solution recommendation logic', () => {
     expect(getVariantNote('Stream API', 'input.stream().flatMap(...).distinct().collect(...)')).toContain('flatMap');
     expect(getVariantNote('Basic Solution', 'return input.filter { it > 0 }.sorted()')).toContain('cleanest');
     expect(getProblemSolutions(problems[0], 'kotlin')[3].recommendation).toBe('Good to try');
+  });
+
+  it('rejects placeholder generator fallbacks that only return the input or a hardcoded boolean', () => {
+    problems.forEach((problem) => {
+      const kotlin = getProblemSolutions(problem, 'kotlin');
+      const java = getProblemSolutions(problem, 'java');
+
+      [...kotlin, ...java].forEach((variant) => {
+        expect(variant.code).not.toMatch(/(?:^|\n)\s*return\s+input\s*(?:;|\n|\})/i);
+        expect(variant.code).not.toMatch(/(?:^|\n)\s*return\s+false\s*(?:;|\n|\})/i);
+        expect(variant.code).not.toMatch(/(?:^|\n)\s*return\s+new\s+ArrayList<>\(input\)\s*(?:;|\n|\})/i);
+      });
+    });
   });
 
   it('uses title-aware implementations for common interview problems instead of generic placeholders', () => {
@@ -252,6 +267,21 @@ describe('simple learning flow', () => {
 
     expect(loaded?.kotlin?.[0].code).toContain('fun binarySearch');
     expect(loaded?.java?.[0].code).toContain('public static int binarySearch');
+  });
+
+  it('derives the migrated solution file name from the canonical question format', () => {
+    expect(getSolutionFileName(38, 'Find duplicate characters')).toBe('question-038-find-duplicate-characters');
+    expect(getSolutionFileName(105, 'Binary Search')).toBe('question-105-binary-search');
+  });
+
+  it('keeps migrated solution files aligned with the full 120-question roadmap', () => {
+    const solutionFiles = readdirSync(new URL('../data/solutions', import.meta.url))
+      .filter((fileName) => fileName.endsWith('.json'))
+      .sort();
+
+    expect(solutionFiles).toHaveLength(problems.length);
+    expect(solutionFiles[0]).toBe('question-001-reverse-a-string.json');
+    expect(solutionFiles.at(-1)).toBe('question-120-number-of-islands.json');
   });
 
   it('keeps examples aligned with specific operations', () => {

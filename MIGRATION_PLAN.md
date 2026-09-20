@@ -4,6 +4,36 @@
 
 Move question metadata and Kotlin/Java solutions out of the monolithic `src/data/roadmap.ts` file into small, indexed JSON files. The app should load only the topic and solution data needed for the current workflow while preserving existing behavior.
 
+## Migration Status
+
+### Completed
+
+- Added the lightweight topic index at `src/data/topic-index.json`.
+- Split topic indexes into descriptive files under `src/data/topics/`.
+- Added cached lazy topic loading through `src/data/topic-index-loader.ts`.
+- Added `loadQuestionsByTopic(topic)` as the topic-scoped question boundary.
+- Added cached lazy solution loading through `src/data/question-solution-loader.ts`.
+- Migrated duplicate-character solutions into `question-005-find-duplicate-characters.json`.
+- Migrated Binary Search solutions into `question-105-binary-search.json`.
+- Standardized data filenames with professional descriptive names.
+- Added contract, syntax, language-contamination, example, and index synchronization tests.
+- Added `MIGRATION_PLAN.md` and published the project to the GitHub `main` branch.
+
+### Remaining
+
+- Migrate the remaining 118 question solution sets into descriptive JSON files.
+- Add a solution manifest or generated validation report for all migrated solution files.
+- Move complete question metadata, contracts, examples, and test cases into per-question JSON files.
+- Update the practice UI to request solution JSON asynchronously when the solution panel opens.
+- Add loading and error states for question and solution requests.
+- Make the UI use lazy question metadata instead of the complete `problems` array.
+- Remove the title-based solution generators from `roadmap.ts` after parity checks pass.
+- Remove duplicate topic index data after one canonical JSON source is established.
+- Add runtime schema validation for every question and solution JSON file.
+- Re-run the full test suite and production build after each topic migration.
+
+The migration is currently in the **foundation and pilot phase**. The file structure and loading boundaries are ready, but the original catalog and generator remain active as compatibility fallbacks until all question data has been migrated.
+
 ## Current State
 
 Completed:

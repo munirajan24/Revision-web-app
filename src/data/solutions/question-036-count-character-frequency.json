@@ -1,0 +1,54 @@
+{
+  "kotlin": [
+    {
+      "label": "Basic Solution",
+      "code": "fun countCharacterFrequency(input: String): Map<Char, Int> {\n    return input.groupingBy { it }.eachCount()\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: this is readable and compact, but the stream chain is usually less explicit than the cleaner loop-based explanation when the interviewer wants exact control."
+    },
+    {
+      "label": "Alternative",
+      "code": "fun countCharacterFrequency(input: String): Map<Char, Int> {\n    val counts = mutableMapOf<Char, Int>()\n    for (char in input) {\n        counts[char] = counts.getOrDefault(char, 0) + 1\n    }\n    return counts\n\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: this is a valid backup and easy to explain, but the simplest direct solution usually reads better in an interview."
+    },
+    {
+      "label": "Loop",
+      "code": "fun countCharacterFrequency(input: String): Map<Char, Int> {\n    val counts = mutableMapOf<Char, Int>()\n    for (char in input) {\n        if (counts.containsKey(char)) {\n            counts[char] = counts[char]!! + 1\n        } else {\n            counts[char] = 1\n        }\n    }\n    return counts\n\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: the explicit loop is easy to reason about, which makes it a strong backup when the interviewer wants to see every step."
+    },
+    {
+      "label": "Stream API",
+      "code": "fun countCharacterFrequency(input: String): Map<Char, Int> {\n    return input.asSequence().groupingBy { it }.eachCount()\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: this is concise and elegant, but it is usually a second-choice answer unless the problem is clearly built for a collection pipeline."
+    }
+  ],
+  "java": [
+    {
+      "label": "Basic Solution",
+      "code": "public static Map<Character, Integer> countCharacterFrequency(String input) {\n    return input.chars().mapToObj(c -> (char) c).collect(Collectors.groupingBy(c -> c, LinkedHashMap::new, Collectors.summingInt(c -> 1)));\n }",
+      "recommendation": "Avoid unless needed",
+      "note": "Good to try: this is readable and compact, but the stream chain is usually less explicit than the cleaner loop-based explanation when the interviewer wants exact control."
+    },
+    {
+      "label": "Alternative",
+      "code": "public static Map<Character, Integer> countCharacterFrequency(String input) {\n    return input.chars().mapToObj(c -> (char) c).collect(Collectors.groupingBy(c -> c, LinkedHashMap::new, Collectors.summingInt(c -> 1)));\n }",
+      "recommendation": "Avoid unless needed",
+      "note": "Best: this keeps the core idea simple and readable without overcomplicating the logic."
+    },
+    {
+      "label": "Loop",
+      "code": "public static Map<Character, Integer> countCharacterFrequency(String input) {\n    return input.chars().mapToObj(c -> (char) c).collect(Collectors.groupingBy(c -> c, LinkedHashMap::new, Collectors.summingInt(c -> 1)));\n }",
+      "recommendation": "Avoid unless needed",
+      "note": "Best: this is the clearest control-flow version and is a reliable fallback if the interviewer prefers explicit logic."
+    },
+    {
+      "label": "Stream API",
+      "code": "public static Map<Character, Integer> countCharacterFrequency(String input) {\n    return input.chars().mapToObj(c -> (char) c).collect(Collectors.groupingBy(c -> c, LinkedHashMap::new, Collectors.summingInt(c -> 1)));\n }",
+      "recommendation": "Avoid unless needed",
+      "note": "Avoid unless needed: this flatMap/flatten style is clever but often harder to explain and reason about than a straightforward loop or direct collection approach."
+    }
+  ]
+}

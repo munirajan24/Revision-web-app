@@ -1,0 +1,54 @@
+{
+  "kotlin": [
+    {
+      "label": "Basic Solution",
+      "code": "fun sortCharactersInAString(input: String): String {\n    return input.toCharArray().sorted().joinToString(\"\")\n}",
+      "recommendation": "Best",
+      "note": "Best: this is the cleanest and most direct version, and it is usually the strongest first answer in an interview."
+    },
+    {
+      "label": "Alternative",
+      "code": "fun sortCharactersInAString(input: String): String {\n      val chars = input.toCharArray()\n      return chars.sorted().joinToString(\"\")\n    }",
+      "recommendation": "Best",
+      "note": "Best: this keeps the core idea simple and readable without overcomplicating the logic."
+    },
+    {
+      "label": "Loop",
+      "code": "fun sortCharactersInAString(input: String): String {\n      val chars = input.toCharArray()\n      val ordered = chars.sorted()\n      return ordered.joinToString(\"\")\n    }",
+      "recommendation": "Best",
+      "note": "Best: this is the clearest control-flow version and is a reliable fallback if the interviewer prefers explicit logic."
+    },
+    {
+      "label": "Stream API",
+      "code": "fun sortCharactersInAString(input: String): String {\n    return input.toCharArray().sorted().joinToString(\"\")\n}",
+      "recommendation": "Best",
+      "note": "Good to try: this version is compact and readable, although a simpler loop or direct implementation is often the stronger first answer."
+    }
+  ],
+  "java": [
+    {
+      "label": "Basic Solution",
+      "code": "public static String sortCharactersInAString(String input) { return input.chars().sorted().mapToObj(ch -> String.valueOf((char) ch)).collect(Collectors.joining()); }",
+      "recommendation": "Good to try",
+      "note": "Good to try: this is readable and compact, but the stream chain is usually less explicit than the cleaner loop-based explanation when the interviewer wants exact control."
+    },
+    {
+      "label": "Alternative",
+      "code": "public static String sortCharactersInAString(String input) { char[] chars = input.toCharArray(); Arrays.sort(chars); return new String(chars); }",
+      "recommendation": "Best",
+      "note": "Best: this keeps the core idea simple and readable without overcomplicating the logic."
+    },
+    {
+      "label": "Loop",
+      "code": "public static String sortCharactersInAString(String input) {\n    List<Character> chars = input.chars().mapToObj(ch -> (char) ch).sorted().collect(Collectors.toList()); StringBuilder builder = new StringBuilder(); for (char ch : chars) builder.append(ch); return builder.toString();\n }",
+      "recommendation": "Good to try",
+      "note": "Good to try: the explicit loop is easy to reason about, which makes it a strong backup when the interviewer wants to see every step."
+    },
+    {
+      "label": "Stream API",
+      "code": "public static String sortCharactersInAString(String input) { return input.chars().sorted().mapToObj(ch -> String.valueOf((char) ch)).collect(Collectors.joining()); }",
+      "recommendation": "Good to try",
+      "note": "Good to try: this is concise and elegant, but it is usually a second-choice answer unless the problem is clearly built for a collection pipeline."
+    }
+  ]
+}

@@ -1,0 +1,54 @@
+{
+  "kotlin": [
+    {
+      "label": "Basic Solution",
+      "code": "fun reverseLinkedList(input: List<Int>): List<Int> {\n    return input.asReversed()\n}",
+      "recommendation": "Best",
+      "note": "Best: this is the cleanest and most direct version, and it is usually the strongest first answer in an interview."
+    },
+    {
+      "label": "Alternative",
+      "code": "fun reverseLinkedList(input: List<Int>): List<Int> {\n    val reversed = mutableListOf<Int>()\n      for (value in input.asReversed()) reversed.add(value)\n      return reversed\n\n    }",
+      "recommendation": "Good to try",
+      "note": "Good to try: this is a valid backup and easy to explain, but the simplest direct solution usually reads better in an interview."
+    },
+    {
+      "label": "Loop",
+      "code": "fun reverseLinkedList(input: List<Int>): List<Int> {\n    val result = mutableListOf<Int>()\n      for (index in input.indices.reversed()) result.add(input[index])\n      return result\n\n    }",
+      "recommendation": "Good to try",
+      "note": "Good to try: the explicit loop is easy to reason about, which makes it a strong backup when the interviewer wants to see every step."
+    },
+    {
+      "label": "Stream API",
+      "code": "fun reverseLinkedList(input: List<Int>): List<Int> {\n    return input.asReversed()\n}",
+      "recommendation": "Best",
+      "note": "Good to try: this version is compact and readable, although a simpler loop or direct implementation is often the stronger first answer."
+    }
+  ],
+  "java": [
+    {
+      "label": "Basic Solution",
+      "code": "public static List<Integer> reverseLinkedList(List<Integer> input) { List<Integer> reversed = new ArrayList<>(input); Collections.reverse(reversed); return reversed; }",
+      "recommendation": "Best",
+      "note": "Best: this is the cleanest and most direct version, and it is usually the strongest first answer in an interview."
+    },
+    {
+      "label": "Alternative",
+      "code": "public static List<Integer> reverseLinkedList(List<Integer> input) {\n    List<Integer> reversed = new ArrayList<>(); for (int i = input.size() - 1; i >= 0; i--) reversed.add(input.get(i)); return reversed;\n }",
+      "recommendation": "Good to try",
+      "note": "Good to try: this is a valid backup and easy to explain, but the simplest direct solution usually reads better in an interview."
+    },
+    {
+      "label": "Loop",
+      "code": "public static List<Integer> reverseLinkedList(List<Integer> input) {\n    List<Integer> reversed = new ArrayList<>(); for (int i = input.size() - 1; i >= 0; i--) reversed.add(input.get(i)); return reversed;\n }",
+      "recommendation": "Good to try",
+      "note": "Good to try: the explicit loop is easy to reason about, which makes it a strong backup when the interviewer wants to see every step."
+    },
+    {
+      "label": "Stream API",
+      "code": "public static List<Integer> reverseLinkedList(List<Integer> input) { List<Integer> reversed = new ArrayList<>(input); Collections.reverse(reversed); return reversed; }",
+      "recommendation": "Best",
+      "note": "Good to try: this version is compact and readable, although a simpler loop or direct implementation is often the stronger first answer."
+    }
+  ]
+}

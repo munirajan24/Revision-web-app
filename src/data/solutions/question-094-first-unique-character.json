@@ -1,0 +1,54 @@
+{
+  "kotlin": [
+    {
+      "label": "Basic Solution",
+      "code": "fun firstUniqueCharacter(input: String): Char {\n    return input.groupingBy { it }.eachCount().let { counts -> input.first { counts[it] == 1 } }\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: this is readable and compact, but the stream chain is usually less explicit than the cleaner loop-based explanation when the interviewer wants exact control."
+    },
+    {
+      "label": "Alternative",
+      "code": "fun firstUniqueCharacter(input: String): Char {\n    val counts = input.groupingBy { it }.eachCount()\n    return input.firstOrNull { counts[it] == 1 } ?: '\\u0000'\n}",
+      "recommendation": "Best",
+      "note": "Best: this keeps the core idea simple and readable without overcomplicating the logic."
+    },
+    {
+      "label": "Loop",
+      "code": "fun firstUniqueCharacter(input: String): Char {\n    val counts = mutableMapOf<Char, Int>()\n    for (char in input) counts[char] = (counts[char] ?: 0) + 1\n    for (char in input) if (counts[char] == 1) return char\n    return '\\u0000'\n\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: the explicit loop is easy to reason about, which makes it a strong backup when the interviewer wants to see every step."
+    },
+    {
+      "label": "Stream API",
+      "code": "fun firstUniqueCharacter(input: String): Char {\n    return input.asSequence().groupingBy { it }.eachCount().let { counts -> input.first { counts[it] == 1 } }\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: this is concise and elegant, but it is usually a second-choice answer unless the problem is clearly built for a collection pipeline."
+    }
+  ],
+  "java": [
+    {
+      "label": "Basic Solution",
+      "code": "public static List<Character> firstUniqueCharacter(String input) { return input.chars().mapToObj(c -> (char) c).distinct().collect(Collectors.toList()); }",
+      "recommendation": "Good to try",
+      "note": "Good to try: this is readable and compact, but the stream chain is usually less explicit than the cleaner loop-based explanation when the interviewer wants exact control."
+    },
+    {
+      "label": "Alternative",
+      "code": "public static List<Character> firstUniqueCharacter(String input) { return input.chars().mapToObj(c -> (char) c).distinct().collect(Collectors.toList()); }",
+      "recommendation": "Best",
+      "note": "Best: this keeps the core idea simple and readable without overcomplicating the logic."
+    },
+    {
+      "label": "Loop",
+      "code": "public static List<Character> firstUniqueCharacter(String input) { return input.chars().mapToObj(c -> (char) c).distinct().collect(Collectors.toList()); }",
+      "recommendation": "Best",
+      "note": "Best: this is the clearest control-flow version and is a reliable fallback if the interviewer prefers explicit logic."
+    },
+    {
+      "label": "Stream API",
+      "code": "public static List<Character> firstUniqueCharacter(String input) { return input.chars().mapToObj(c -> (char) c).distinct().collect(Collectors.toList()); }",
+      "recommendation": "Good to try",
+      "note": "Good to try: this is concise and elegant, but it is usually a second-choice answer unless the problem is clearly built for a collection pipeline."
+    }
+  ]
+}

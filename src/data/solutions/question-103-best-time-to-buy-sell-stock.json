@@ -1,0 +1,54 @@
+{
+  "kotlin": [
+    {
+      "label": "Basic Solution",
+      "code": "fun bestTimeToBuySellStock(prices: IntArray): Int {\n    if (prices.isEmpty()) return 0\n    var minPrice = prices[0]\n    var bestProfit = 0\n    for (price in prices.drop(1)) {\n        minPrice = minOf(minPrice, price)\n        bestProfit = maxOf(bestProfit, price - minPrice)\n    }\n    return bestProfit\n\n}",
+      "recommendation": "Best",
+      "note": "Best: this is the cleanest and most direct version, and it is usually the strongest first answer in an interview."
+    },
+    {
+      "label": "Alternative",
+      "code": "fun bestTimeToBuySellStock(prices: IntArray): Int {\n    var minPrice = Int.MAX_VALUE\n    var maxProfit = 0\n    for (price in prices) {\n        minPrice = minOf(minPrice, price)\n        maxProfit = maxOf(maxProfit, price - minPrice)\n    }\n    return maxProfit\n\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: this is a valid backup and easy to explain, but the simplest direct solution usually reads better in an interview."
+    },
+    {
+      "label": "Loop",
+      "code": "fun bestTimeToBuySellStock(prices: IntArray): Int {\n    var minPrice = Int.MAX_VALUE\n    var maxProfit = 0\n    for (price in prices) {\n        if (price < minPrice) minPrice = price\n        else maxProfit = maxOf(maxProfit, price - minPrice)\n    }\n    return maxProfit\n\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: the explicit loop is easy to reason about, which makes it a strong backup when the interviewer wants to see every step."
+    },
+    {
+      "label": "Stream API",
+      "code": "fun bestTimeToBuySellStock(prices: IntArray): Int {\n    return prices.asSequence().fold(Pair(Int.MAX_VALUE, 0)) { state, price ->\n    val minPrice = minOf(state.first, price)\n    val maxProfit = maxOf(state.second, price - minPrice)\n    minPrice to maxProfit\n}.second\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: this is concise and elegant, but it is usually a second-choice answer unless the problem is clearly built for a collection pipeline."
+    }
+  ],
+  "java": [
+    {
+      "label": "Basic Solution",
+      "code": "public static List<Integer> bestTimeToBuySellStock(List<Integer> input) {\n    return input.stream().filter(value -> value > 0).sorted().toList();\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: this is readable and compact, but the stream chain is usually less explicit than the cleaner loop-based explanation when the interviewer wants exact control."
+    },
+    {
+      "label": "Alternative",
+      "code": "public static List<Integer> bestTimeToBuySellStock(List<Integer> input) {\n    List<Integer> result = new ArrayList<>();\n    for (int value : input) {\n        if (value > 0) result.add(value);\n    }\n    Collections.sort(result);\n    return result;\n\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: this is a valid backup and easy to explain, but the simplest direct solution usually reads better in an interview."
+    },
+    {
+      "label": "Loop",
+      "code": "public static List<Integer> bestTimeToBuySellStock(List<Integer> input) {\n    List<Integer> result = new ArrayList<>();\n    for (int value : input) {\n        if (value > 0) result.add(value);\n    }\n    Collections.sort(result);\n    return result;\n\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: the explicit loop is easy to reason about, which makes it a strong backup when the interviewer wants to see every step."
+    },
+    {
+      "label": "Stream API",
+      "code": "public static List<Integer> bestTimeToBuySellStock(List<Integer> input) {\n    return input.stream().filter(value -> value > 0).sorted().collect(Collectors.toList());\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: this is concise and elegant, but it is usually a second-choice answer unless the problem is clearly built for a collection pipeline."
+    }
+  ]
+}

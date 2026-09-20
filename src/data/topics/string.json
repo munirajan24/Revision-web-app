@@ -1,1 +1,46 @@
-[{"id":1,"title":"Reverse a String"},{"id":2,"title":"Check if String is Palindrome"},{"id":3,"title":"Count vowels in a String"},{"id":9,"title":"Count words in a sentence"},{"id":10,"title":"Reverse each word in a sentence"},{"id":11,"title":"Find the longest word"},{"id":12,"title":"Find the shortest word"},{"id":13,"title":"Check whether two strings are equal"},{"id":14,"title":"Check whether one string contains another"},{"id":15,"title":"Count occurrences of a substring"},{"id":92,"title":"Valid Anagram"}]
+[
+    {
+        "id": 1,
+        "title": "Reverse a String"
+    },
+    {
+        "id": 2,
+        "title": "Check if String is Palindrome"
+    },
+    {
+        "id": 3,
+        "title": "Count vowels in a String"
+    },
+    {
+        "id": 9,
+        "title": "Count words in a sentence"
+    },
+    {
+        "id": 10,
+        "title": "Reverse each word in a sentence"
+    },
+    {
+        "id": 11,
+        "title": "Find the longest word"
+    },
+    {
+        "id": 12,
+        "title": "Find the shortest word"
+    },
+    {
+        "id": 13,
+        "title": "Check whether two strings are equal"
+    },
+    {
+        "id": 14,
+        "title": "Check whether one string contains another"
+    },
+    {
+        "id": 15,
+        "title": "Count occurrences of a substring"
+    },
+    {
+        "id": 92,
+        "title": "Valid Anagram"
+    }
+]

@@ -1,0 +1,54 @@
+{
+  "kotlin": [
+    {
+      "label": "Basic Solution",
+      "code": "fun twoSum(numbers: IntArray, target: Int): IntArray {\n    val seen = mutableMapOf<Int, Int>()\n    for ((index, value) in numbers.withIndex()) {\n        val complement = target - value\n        if (seen.containsKey(complement)) {\n            return intArrayOf(seen[complement]!!, index)\n        }\n        seen[value] = index\n    }\n    return intArrayOf()\n\n}",
+      "recommendation": "Best",
+      "note": "Best: this is the cleanest and most direct version, and it is usually the strongest first answer in an interview."
+    },
+    {
+      "label": "Alternative",
+      "code": "fun twoSum(numbers: IntArray, target: Int): IntArray {\n    val seen = hashMapOf<Int, Int>()\n    for (index in numbers.indices) {\n        val needed = target - numbers[index]\n        if (seen.containsKey(needed)) {\n            return intArrayOf(seen[needed]!!, index)\n        }\n        seen[numbers[index]] = index\n    }\n    return intArrayOf()\n\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: this is a valid backup and easy to explain, but the simplest direct solution usually reads better in an interview."
+    },
+    {
+      "label": "Loop",
+      "code": "fun twoSum(numbers: IntArray, target: Int): IntArray {\n    val seen = mutableMapOf<Int, Int>()\n    for (i in numbers.indices) {\n        val wanted = target - numbers[i]\n        for (j in i + 1 until numbers.size) {\n            if (numbers[j] == wanted) return intArrayOf(i, j)\n        }\n        seen[numbers[i]] = i\n    }\n    return intArrayOf()\n\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: the explicit loop is easy to reason about, which makes it a strong backup when the interviewer wants to see every step."
+    },
+    {
+      "label": "Stream API",
+      "code": "fun twoSum(numbers: IntArray, target: Int): IntArray {\n    return numbers.indices.asSequence()\n        .mapNotNull { i ->\n            val diff = target - numbers[i]\n            val j = numbers.indices.firstOrNull { idx -> idx != i && numbers[idx] == diff }\n            if (j != null) intArrayOf(i, j) else null\n        }\n        .firstOrNull() ?: intArrayOf()\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: this is concise and elegant, but it is usually a second-choice answer unless the problem is clearly built for a collection pipeline."
+    }
+  ],
+  "java": [
+    {
+      "label": "Basic Solution",
+      "code": "public static int[] twoSum(int[] numbers, int target) {\n    Map<Integer, Integer> seen = new HashMap<>();\n    for (int i = 0; i < numbers.length; i++) {\n        int complement = target - numbers[i];\n        if (seen.containsKey(complement)) {\n            return new int[] { seen.get(complement), i };\n        }\n        seen.put(numbers[i], i);\n    }\n    return new int[] {};\n\n}",
+      "recommendation": "Best",
+      "note": "Best: this is the cleanest and most direct version, and it is usually the strongest first answer in an interview."
+    },
+    {
+      "label": "Alternative",
+      "code": "public static int[] twoSum(int[] numbers, int target) {\n    Map<Integer, Integer> indexByValue = new HashMap<>();\n    for (int i = 0; i < numbers.length; i++) {\n        int needed = target - numbers[i];\n        if (indexByValue.containsKey(needed)) {\n            return new int[] { indexByValue.get(needed), i };\n        }\n        indexByValue.put(numbers[i], i);\n    }\n    return new int[] {};\n\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: this is a valid backup and easy to explain, but the simplest direct solution usually reads better in an interview."
+    },
+    {
+      "label": "Loop",
+      "code": "public static int[] twoSum(int[] numbers, int target) {\n    for (int i = 0; i < numbers.length; i++) {\n        for (int j = i + 1; j < numbers.length; j++) {\n            if (numbers[i] + numbers[j] == target) {\n                return new int[] { i, j };\n            }\n        }\n    }\n    return new int[] {};\n\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: the explicit loop is easy to reason about, which makes it a strong backup when the interviewer wants to see every step."
+    },
+    {
+      "label": "Stream API",
+      "code": "public static int[] twoSum(int[] numbers, int target) {\n    Map<Integer, Integer> seen = new HashMap<>();\n    for (int i = 0; i < numbers.length; i++) {\n        int needed = target - numbers[i];\n        if (seen.containsKey(needed)) {\n            return new int[] { seen.get(needed), i };\n        }\n        seen.put(numbers[i], i);\n    }\n    return new int[] {};\n\n}",
+      "recommendation": "Best",
+      "note": "Good to try: this version is compact and readable, although a simpler loop or direct implementation is often the stronger first answer."
+    }
+  ]
+}

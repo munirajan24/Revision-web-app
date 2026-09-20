@@ -1,0 +1,54 @@
+{
+  "kotlin": [
+    {
+      "label": "Basic Solution",
+      "code": "fun validParentheses(input: String): Boolean {\n    val stack = ArrayDeque<Char>()\n    val pairs = mapOf(')' to '(', '}' to '{', ']' to '[')\n    for (char in input) {\n        if (char in \"([{\") stack.addLast(char)\n        else if (pairs[char] != stack.removeLastOrNull()) return false\n    }\n    return stack.isEmpty()\n\n}",
+      "recommendation": "Best",
+      "note": "Best: this is the cleanest and most direct version, and it is usually the strongest first answer in an interview."
+    },
+    {
+      "label": "Alternative",
+      "code": "fun validParentheses(input: String): Boolean {\n    val stack = mutableListOf<Char>()\n    val pairs = mapOf(')' to '(', '}' to '{', ']' to '[')\n    for (char in input) {\n        if (char in \"([{\" ) stack.add(char)\n        else if (pairs[char] == stack.lastOrNull()) stack.removeAt(stack.lastIndex)\n        else return false\n    }\n    return stack.isEmpty()\n\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: this is a valid backup and easy to explain, but the simplest direct solution usually reads better in an interview."
+    },
+    {
+      "label": "Loop",
+      "code": "fun validParentheses(input: String): Boolean {\n    val stack = ArrayDeque<Char>()\n    for (char in input) {\n        when (char) {\n            '(' -> stack.addLast(char)\n            '[' -> stack.addLast(char)\n            '{' -> stack.addLast(char)\n            ')' -> if (stack.removeLastOrNull() != '(') return false\n            ']' -> if (stack.removeLastOrNull() != '[') return false\n            '}' -> if (stack.removeLastOrNull() != '{') return false\n        }\n    }\n    return stack.isEmpty()\n\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: the explicit loop is easy to reason about, which makes it a strong backup when the interviewer wants to see every step."
+    },
+    {
+      "label": "Stream API",
+      "code": "fun validParentheses(input: String): Boolean {\n    val stack = ArrayDeque<Char>()\n      val valid = input.asSequence().all { char ->\n        when (char) {\n          '(' -> {\n            stack.addLast(char)\n            true\n          }\n          '[' -> {\n            stack.addLast(char)\n            true\n          }\n          '{' -> {\n            stack.addLast(char)\n            true\n          }\n          ')' -> stack.removeLastOrNull() == '('\n          ']' -> stack.removeLastOrNull() == '['\n          '}' -> stack.removeLastOrNull() == '{'\n          else -> true\n        }\n      }\n      return valid && stack.isEmpty()\n\n    }",
+      "recommendation": "Good to try",
+      "note": "Good to try: this is concise and elegant, but it is usually a second-choice answer unless the problem is clearly built for a collection pipeline."
+    }
+  ],
+  "java": [
+    {
+      "label": "Basic Solution",
+      "code": "public static boolean validParentheses(String input) {\n    Deque<Character> stack = new ArrayDeque<>();\n    Map<Character, Character> pairs = Map.of(')', '(', '}', '{', ']', '[');\n    for (char c : input.toCharArray()) {\n        if (c == '(' || c == '[' || c == '{') stack.push(c);\n        else if (stack.isEmpty() || stack.pop() != pairs.get(c)) return false;\n    }\n    return stack.isEmpty();\n\n}",
+      "recommendation": "Best",
+      "note": "Best: this is the cleanest and most direct version, and it is usually the strongest first answer in an interview."
+    },
+    {
+      "label": "Alternative",
+      "code": "public static boolean validParentheses(String input) {\n    Deque<Character> stack = new ArrayDeque<>();\n    for (char c : input.toCharArray()) {\n        if (c == '(' || c == '[' || c == '{') stack.push(c);\n        else if (c == ')' && (stack.isEmpty() || stack.pop() != '(')) return false;\n        else if (c == ']' && (stack.isEmpty() || stack.pop() != '[')) return false;\n        else if (c == '}' && (stack.isEmpty() || stack.pop() != '{')) return false;\n    }\n    return stack.isEmpty();\n\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: this is a valid backup and easy to explain, but the simplest direct solution usually reads better in an interview."
+    },
+    {
+      "label": "Loop",
+      "code": "public static boolean validParentheses(String input) {\n    Deque<Character> stack = new ArrayDeque<>();\n    for (char c : input.toCharArray()) {\n        switch (c) {\n            case '(':\n            case '[':\n            case '{':\n                stack.push(c);\n                break;\n            case ')':\n                if (stack.isEmpty() || stack.pop() != '(') return false;\n                break;\n            case ']':\n                if (stack.isEmpty() || stack.pop() != '[') return false;\n                break;\n            case '}':\n                if (stack.isEmpty() || stack.pop() != '{') return false;\n                break;\n            default:\n                break;\n        }\n    }\n    return stack.isEmpty();\n\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: the explicit loop is easy to reason about, which makes it a strong backup when the interviewer wants to see every step."
+    },
+    {
+      "label": "Stream API",
+      "code": "public static boolean validParentheses(String input) {\n    Deque<Character> stack = new ArrayDeque<>();\n    return input.chars().allMatch(ch -> {\n        if (ch == '(' || ch == '[' || ch == '{') {\n            stack.push((char) ch);\n            return true;\n        }\n        if (ch == ')' && (stack.isEmpty() || stack.pop() != '(')) return false;\n        if (ch == ']' && (stack.isEmpty() || stack.pop() != '[')) return false;\n        if (ch == '}' && (stack.isEmpty() || stack.pop() != '{')) return false;\n        return true;\n    }) && stack.isEmpty();\n\n}",
+      "recommendation": "Best",
+      "note": "Good to try: this version is compact and readable, although a simpler loop or direct implementation is often the stronger first answer."
+    }
+  ]
+}

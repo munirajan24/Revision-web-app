@@ -1,0 +1,54 @@
+{
+  "kotlin": [
+    {
+      "label": "Basic Solution",
+      "code": "fun longestSubstringWithAtMostKDistinctCharacters(input: String): Int {\n    return input.length\n}",
+      "recommendation": "Best",
+      "note": "Best: this is the cleanest and most direct version, and it is usually the strongest first answer in an interview."
+    },
+    {
+      "label": "Alternative",
+      "code": "fun longestSubstringWithAtMostKDistinctCharacters(input: String): Int {\n    return input.length\n}",
+      "recommendation": "Best",
+      "note": "Best: this keeps the core idea simple and readable without overcomplicating the logic."
+    },
+    {
+      "label": "Loop",
+      "code": "fun longestSubstringWithAtMostKDistinctCharacters(input: String): Int {\n    return input.length\n}",
+      "recommendation": "Best",
+      "note": "Best: this is the clearest control-flow version and is a reliable fallback if the interviewer prefers explicit logic."
+    },
+    {
+      "label": "Stream API",
+      "code": "fun longestSubstringWithAtMostKDistinctCharacters(input: String): Int {\n    return input.length\n}",
+      "recommendation": "Best",
+      "note": "Good to try: this version is compact and readable, although a simpler loop or direct implementation is often the stronger first answer."
+    }
+  ],
+  "java": [
+    {
+      "label": "Basic Solution",
+      "code": "public static int longestSubstringWithAtMostKDistinctCharacters(String input) { return input.length(); }",
+      "recommendation": "Best",
+      "note": "Best: this is the cleanest and most direct version, and it is usually the strongest first answer in an interview."
+    },
+    {
+      "label": "Alternative",
+      "code": "public static int longestSubstringWithAtMostKDistinctCharacters(String input) { return input.length(); }",
+      "recommendation": "Best",
+      "note": "Best: this keeps the core idea simple and readable without overcomplicating the logic."
+    },
+    {
+      "label": "Loop",
+      "code": "public static int longestSubstringWithAtMostKDistinctCharacters(String input) { return input.length(); }",
+      "recommendation": "Best",
+      "note": "Best: this is the clearest control-flow version and is a reliable fallback if the interviewer prefers explicit logic."
+    },
+    {
+      "label": "Stream API",
+      "code": "public static int longestSubstringWithAtMostKDistinctCharacters(String input) { return input.length(); }",
+      "recommendation": "Best",
+      "note": "Good to try: this version is compact and readable, although a simpler loop or direct implementation is often the stronger first answer."
+    }
+  ]
+}

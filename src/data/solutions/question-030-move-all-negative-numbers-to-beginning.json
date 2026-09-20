@@ -1,0 +1,54 @@
+{
+  "kotlin": [
+    {
+      "label": "Basic Solution",
+      "code": "fun moveAllNegativeNumbersToBeginning(input: List<Int>): List<Int> {\n    return input.filter { it < 0 } + input.filter { it >= 0 }\n}",
+      "recommendation": "Best",
+      "note": "Best: this is the cleanest and most direct version, and it is usually the strongest first answer in an interview."
+    },
+    {
+      "label": "Alternative",
+      "code": "fun moveAllNegativeNumbersToBeginning(input: List<Int>): List<Int> {\n    val negatives = mutableListOf<Int>()\n    val nonNegatives = mutableListOf<Int>()\n    for (value in input) if (value < 0) negatives.add(value) else nonNegatives.add(value)\n    return negatives + nonNegatives\n\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: this is a valid backup and easy to explain, but the simplest direct solution usually reads better in an interview."
+    },
+    {
+      "label": "Loop",
+      "code": "fun moveAllNegativeNumbersToBeginning(input: List<Int>): List<Int> {\n    val result = input.toMutableList()\n    result.sortWith(compareBy { if (it < 0) 0 else 1 })\n    return result\n\n}",
+      "recommendation": "Best",
+      "note": "Best: this is the clearest control-flow version and is a reliable fallback if the interviewer prefers explicit logic."
+    },
+    {
+      "label": "Stream API",
+      "code": "fun moveAllNegativeNumbersToBeginning(input: List<Int>): List<Int> {\n    return input.asSequence().partition { it < 0 }.let { it.first + it.second }\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: this is concise and elegant, but it is usually a second-choice answer unless the problem is clearly built for a collection pipeline."
+    }
+  ],
+  "java": [
+    {
+      "label": "Basic Solution",
+      "code": "public static List<Integer> moveAllNegativeNumbersToBeginning(List<Integer> input) {\n    List<Integer> result = new ArrayList<>(input);\n    result.sort(Comparator.comparingInt(value -> value < 0 ? 0 : 1));\n    return result;\n\n}",
+      "recommendation": "Best",
+      "note": "Best: this is the cleanest and most direct version, and it is usually the strongest first answer in an interview."
+    },
+    {
+      "label": "Alternative",
+      "code": "public static List<Integer> moveAllNegativeNumbersToBeginning(List<Integer> input) {\n    List<Integer> negatives = new ArrayList<>();\n    List<Integer> nonNegatives = new ArrayList<>();\n    for (int value : input) if (value < 0) negatives.add(value); else nonNegatives.add(value);\n    negatives.addAll(nonNegatives);\n    return negatives;\n\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: this is a valid backup and easy to explain, but the simplest direct solution usually reads better in an interview."
+    },
+    {
+      "label": "Loop",
+      "code": "public static List<Integer> moveAllNegativeNumbersToBeginning(List<Integer> input) {\n    List<Integer> result = new ArrayList<>();\n    for (int value : input) if (value < 0) result.add(value);\n    for (int value : input) if (value >= 0) result.add(value);\n    return result;\n\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: the explicit loop is easy to reason about, which makes it a strong backup when the interviewer wants to see every step."
+    },
+    {
+      "label": "Stream API",
+      "code": "public static List<Integer> moveAllNegativeNumbersToBeginning(List<Integer> input) {\n    return input.stream().sorted(Comparator.comparingInt(value -> value < 0 ? 0 : 1)).collect(Collectors.toList());\n\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: this is concise and elegant, but it is usually a second-choice answer unless the problem is clearly built for a collection pipeline."
+    }
+  ]
+}

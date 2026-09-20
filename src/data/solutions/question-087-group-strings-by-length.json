@@ -1,0 +1,54 @@
+{
+  "kotlin": [
+    {
+      "label": "Basic Solution",
+      "code": "fun groupStringsByLength(input: List<String>): Map<Int, List<String>> {\n    return input.groupBy { it.length }\n}",
+      "recommendation": "Best",
+      "note": "Best: this is the cleanest and most direct version, and it is usually the strongest first answer in an interview."
+    },
+    {
+      "label": "Alternative",
+      "code": "fun groupStringsByLength(input: List<String>): Map<Int, List<String>> {\n      return input.groupBy { it.length }\n    }",
+      "recommendation": "Best",
+      "note": "Best: this keeps the core idea simple and readable without overcomplicating the logic."
+    },
+    {
+      "label": "Loop",
+      "code": "fun groupStringsByLength(input: List<String>): Map<Int, List<String>> {\n    val groups = mutableMapOf<Int, MutableList<String>>()\n      for (value in input) groups.getOrPut(value.length) { mutableListOf() }.add(value)\n      return groups\n\n    }",
+      "recommendation": "Good to try",
+      "note": "Good to try: the explicit loop is easy to reason about, which makes it a strong backup when the interviewer wants to see every step."
+    },
+    {
+      "label": "Stream API",
+      "code": "fun groupStringsByLength(input: List<String>): Map<Int, List<String>> {\n    return input.groupBy { it.length }\n}",
+      "recommendation": "Best",
+      "note": "Good to try: this version is compact and readable, although a simpler loop or direct implementation is often the stronger first answer."
+    }
+  ],
+  "java": [
+    {
+      "label": "Basic Solution",
+      "code": "public static String groupStringsByLength(String input) { return input.trim(); }",
+      "recommendation": "Best",
+      "note": "Best: this is the cleanest and most direct version, and it is usually the strongest first answer in an interview."
+    },
+    {
+      "label": "Alternative",
+      "code": "public static String groupStringsByLength(String input) { return input.trim(); }",
+      "recommendation": "Best",
+      "note": "Best: this keeps the core idea simple and readable without overcomplicating the logic."
+    },
+    {
+      "label": "Loop",
+      "code": "public static String groupStringsByLength(String input) { return input.trim(); }",
+      "recommendation": "Best",
+      "note": "Best: this is the clearest control-flow version and is a reliable fallback if the interviewer prefers explicit logic."
+    },
+    {
+      "label": "Stream API",
+      "code": "public static String groupStringsByLength(String input) { return input.trim(); }",
+      "recommendation": "Best",
+      "note": "Good to try: this version is compact and readable, although a simpler loop or direct implementation is often the stronger first answer."
+    }
+  ]
+}

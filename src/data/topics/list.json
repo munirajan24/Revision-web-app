@@ -1,1 +1,10 @@
-[{"id":22,"title":"Remove duplicates from array"},{"id":34,"title":"Find elements greater than X"}]
+[
+    {
+        "id": 22,
+        "title": "Remove duplicates from array"
+    },
+    {
+        "id": 34,
+        "title": "Find elements greater than X"
+    }
+]

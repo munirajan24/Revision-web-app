@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { getProblemById, getProblemExamples, getProblemHintsForLanguage, getProblemSolution, getProblemSolutions, getSolutionComplexity, getSolutionFlow, keywordCatalog, levelMeta, problems } from './data/roadmap';
+import { getProblemById, getProblemExamples, getProblemHintsForLanguage, getProblemSolution, getProblemSolutions, getSolutionComplexity, getSolutionFlow, keywordCatalog, levelMeta, loadProblemSolutions, problems, type SolutionLanguage, type SolutionVariant } from './data/roadmap';
 import { calculateMastery, getNextReviewDate } from './engine/mastery';
 
 type View = 'dashboard' | 'questions' | 'practice' | 'keywords' | 'analytics' | 'settings';
@@ -200,6 +200,8 @@ export default function App() {
   const [notes, setNotes] = useState(initial.progress[initial.selectedProblemId]?.notes ?? '');
   const [autocompleteSuggestions, setAutocompleteSuggestions] = useState<Array<{ label: string; detail: string }>>([]);
   const [copiedCodeKey, setCopiedCodeKey] = useState<string | null>(null);
+  const [lazySolutionMap, setLazySolutionMap] = useState<Record<number, Partial<Record<SolutionLanguage, SolutionVariant[]>>>>({});
+  const [solutionLoadState, setSolutionLoadState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const editorRef = useRef<HTMLTextAreaElement | null>(null);
 
   const selectedProblem = getProblemById(selectedProblemId) ?? problems[0];
@@ -304,11 +306,45 @@ export default function App() {
   const currentRecord = progress[selectedProblemId] ?? { ...DEFAULT_PROGRESS };
   const selectedExamples = useMemo(() => getProblemExamples(selectedProblem), [selectedProblem]);
   const activeHints = useMemo(() => getProblemHintsForLanguage(selectedProblem, language), [selectedProblem, language]);
-  const activeSolutions = useMemo(() => getProblemSolutions(selectedProblem, solutionViewLanguage), [selectedProblem, solutionViewLanguage]);
+  const activeSolutions = useMemo(() => {
+    const migrated = lazySolutionMap[selectedProblem.id]?.[solutionViewLanguage];
+    return migrated && migrated.length > 0 ? migrated : getProblemSolutions(selectedProblem, solutionViewLanguage);
+  }, [lazySolutionMap, selectedProblem, solutionViewLanguage]);
   const activeSolution = activeSolutions[selectedSolutionIndex]?.code ?? getProblemSolution(selectedProblem, solutionViewLanguage);
   const activeSolutionLabel = activeSolutions[selectedSolutionIndex]?.label ?? 'Basic Solution';
   const activeSolutionRecommendation = activeSolutions[selectedSolutionIndex]?.recommendation ?? 'Best';
   const activeSolutionNote = activeSolutions[selectedSolutionIndex]?.note ?? 'Best interview answer: shortest, clearest, and usually the most optimal for readability and time complexity.';
+
+  useEffect(() => {
+    if (!showSolution) {
+      setSolutionLoadState('idle');
+      return;
+    }
+
+    let isCancelled = false;
+    setSolutionLoadState('loading');
+
+    loadProblemSolutions(selectedProblem.id, selectedProblem.title)
+      .then((loaded) => {
+        if (isCancelled) return;
+        if (loaded) {
+          setLazySolutionMap((current) => ({
+            ...current,
+            [selectedProblem.id]: loaded,
+          }));
+          setSolutionLoadState('ready');
+          return;
+        }
+        setSolutionLoadState('error');
+      })
+      .catch(() => {
+        if (!isCancelled) setSolutionLoadState('error');
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [selectedProblem.id, selectedProblem.title, showSolution]);
 
   const updateProgress = (id: number, patch: Partial<ProgressEntry>) => {
     setProgress((current) => ({
@@ -821,6 +857,18 @@ export default function App() {
                     </div>
                   </div>
 
+                  {solutionLoadState === 'loading' && (
+                    <div className="hint-card">
+                      <h4>Loading migrated solution…</h4>
+                      <p>Fetching the JSON-backed answer for this question before showing the selected variant.</p>
+                    </div>
+                  )}
+                  {solutionLoadState === 'error' && (
+                    <div className="hint-card">
+                      <h4>Using fallback solution</h4>
+                      <p>The migrated JSON is not available yet for this question, so the app is showing the generated fallback while the migration continues.</p>
+                    </div>
+                  )}
                   <div className="solution-chip-row">
                     {activeSolutions.map((variant, index) => (
                       <button

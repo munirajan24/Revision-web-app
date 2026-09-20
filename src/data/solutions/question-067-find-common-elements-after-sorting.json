@@ -1,0 +1,54 @@
+{
+  "kotlin": [
+    {
+      "label": "Basic Solution",
+      "code": "fun findCommonElementsAfterSorting(input: List<Int>): List<Int> {\n    return input.filter { it > 0 }.sorted()\n}",
+      "recommendation": "Best",
+      "note": "Best: this is the cleanest and most direct version, and it is usually the strongest first answer in an interview."
+    },
+    {
+      "label": "Alternative",
+      "code": "fun findCommonElementsAfterSorting(input: List<Int>): List<Int> {\n    val result = mutableListOf<Int>()\n    for (value in input) {\n        if (value > 0) result.add(value)\n    }\n    result.sort()\n    return result\n\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: this is a valid backup and easy to explain, but the simplest direct solution usually reads better in an interview."
+    },
+    {
+      "label": "Loop",
+      "code": "fun findCommonElementsAfterSorting(input: List<Int>): List<Int> {\n    val result = mutableListOf<Int>()\n    for (value in input) {\n        if (value > 0) result.add(value)\n    }\n    result.sort()\n    return result\n\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: the explicit loop is easy to reason about, which makes it a strong backup when the interviewer wants to see every step."
+    },
+    {
+      "label": "Stream API",
+      "code": "fun findCommonElementsAfterSorting(input: List<Int>): List<Int> {\n    return input.asSequence().filter { it > 0 }.sorted().toList()\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: this is concise and elegant, but it is usually a second-choice answer unless the problem is clearly built for a collection pipeline."
+    }
+  ],
+  "java": [
+    {
+      "label": "Basic Solution",
+      "code": "public static List<Integer> findCommonElementsAfterSorting(List<Integer> input) {\n    return input.stream().filter(value -> value > 0).sorted().toList();\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: this is readable and compact, but the stream chain is usually less explicit than the cleaner loop-based explanation when the interviewer wants exact control."
+    },
+    {
+      "label": "Alternative",
+      "code": "public static List<Integer> findCommonElementsAfterSorting(List<Integer> input) {\n    List<Integer> result = new ArrayList<>();\n    for (int value : input) {\n        if (value > 0) result.add(value);\n    }\n    Collections.sort(result);\n    return result;\n\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: this is a valid backup and easy to explain, but the simplest direct solution usually reads better in an interview."
+    },
+    {
+      "label": "Loop",
+      "code": "public static List<Integer> findCommonElementsAfterSorting(List<Integer> input) {\n    List<Integer> result = new ArrayList<>();\n    for (int value : input) {\n        if (value > 0) result.add(value);\n    }\n    Collections.sort(result);\n    return result;\n\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: the explicit loop is easy to reason about, which makes it a strong backup when the interviewer wants to see every step."
+    },
+    {
+      "label": "Stream API",
+      "code": "public static List<Integer> findCommonElementsAfterSorting(List<Integer> input) {\n    return input.stream().filter(value -> value > 0).sorted().collect(Collectors.toList());\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: this is concise and elegant, but it is usually a second-choice answer unless the problem is clearly built for a collection pipeline."
+    }
+  ]
+}

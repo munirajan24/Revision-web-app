@@ -1,0 +1,54 @@
+{
+  "kotlin": [
+    {
+      "label": "Basic Solution",
+      "code": "fun checkIfStringIsPalindrome(input: String): Boolean {\n    return input == input.reversed()\n}",
+      "recommendation": "Best",
+      "note": "Best: this is the cleanest and most direct version, and it is usually the strongest first answer in an interview."
+    },
+    {
+      "label": "Alternative",
+      "code": "fun checkIfStringIsPalindrome(input: String): Boolean {\n    var left = 0\n    var right = input.length - 1\n    while (left < right) {\n        if (input[left] != input[right]) return false\n        left++\n        right--\n    }\n    return true\n\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: this is a valid backup and easy to explain, but the simplest direct solution usually reads better in an interview."
+    },
+    {
+      "label": "Loop",
+      "code": "fun checkIfStringIsPalindrome(input: String): Boolean {\n    val chars = input.toCharArray()\n    for (i in chars.indices) {\n        if (chars[i] != chars[chars.size - 1 - i]) return false\n    }\n    return true\n\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: the explicit loop is easy to reason about, which makes it a strong backup when the interviewer wants to see every step."
+    },
+    {
+      "label": "Stream API",
+      "code": "fun checkIfStringIsPalindrome(input: String): Boolean {\n    return input.filter { it.isLetterOrDigit() }.lowercase() == input.filter { it.isLetterOrDigit() }.lowercase().reversed()\n}",
+      "recommendation": "Best",
+      "note": "Good to try: this version is compact and readable, although a simpler loop or direct implementation is often the stronger first answer."
+    }
+  ],
+  "java": [
+    {
+      "label": "Basic Solution",
+      "code": "public static boolean checkIfStringIsPalindrome(String input) {\n    return input.equals(new StringBuilder(input).reverse().toString());\n}",
+      "recommendation": "Best",
+      "note": "Best: this is the cleanest and most direct version, and it is usually the strongest first answer in an interview."
+    },
+    {
+      "label": "Alternative",
+      "code": "public static boolean checkIfStringIsPalindrome(String input) {\n    int left = 0;\n    int right = input.length() - 1;\n    while (left < right) {\n        if (input.charAt(left) != input.charAt(right)) return false;\n        left++;\n        right--;\n    }\n    return true;\n\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: this is a valid backup and easy to explain, but the simplest direct solution usually reads better in an interview."
+    },
+    {
+      "label": "Loop",
+      "code": "public static boolean checkIfStringIsPalindrome(String input) {\n    char[] chars = input.toCharArray();\n    for (int i = 0; i < chars.length; i++) {\n        if (chars[i] != chars[chars.length - 1 - i]) return false;\n    }\n    return true;\n\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: the explicit loop is easy to reason about, which makes it a strong backup when the interviewer wants to see every step."
+    },
+    {
+      "label": "Stream API",
+      "code": "public static boolean checkIfStringIsPalindrome(String input) {\n    String normalized = input.replaceAll(\"[^a-zA-Z0-9]\", \"\").toLowerCase();\n    return normalized.equals(new StringBuilder(normalized).reverse().toString());\n\n}",
+      "recommendation": "Best",
+      "note": "Good to try: this version is compact and readable, although a simpler loop or direct implementation is often the stronger first answer."
+    }
+  ]
+}

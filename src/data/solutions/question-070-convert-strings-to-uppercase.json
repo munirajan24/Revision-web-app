@@ -1,0 +1,54 @@
+{
+  "kotlin": [
+    {
+      "label": "Basic Solution",
+      "code": "fun convertStringsToUppercase(input: List<String>): List<String> {\n    return input.map { it.uppercase() }\n}",
+      "recommendation": "Best",
+      "note": "Best: this is the cleanest and most direct version, and it is usually the strongest first answer in an interview."
+    },
+    {
+      "label": "Alternative",
+      "code": "fun convertStringsToUppercase(input: List<String>): List<String> {\n      return input.map { it.uppercase() }\n    }",
+      "recommendation": "Best",
+      "note": "Best: this keeps the core idea simple and readable without overcomplicating the logic."
+    },
+    {
+      "label": "Loop",
+      "code": "fun convertStringsToUppercase(input: List<String>): List<String> {\n    val result = mutableListOf<String>()\n      for (value in input) result.add(value.uppercase())\n      return result\n\n    }",
+      "recommendation": "Good to try",
+      "note": "Good to try: the explicit loop is easy to reason about, which makes it a strong backup when the interviewer wants to see every step."
+    },
+    {
+      "label": "Stream API",
+      "code": "fun convertStringsToUppercase(input: List<String>): List<String> {\n    return input.map { it.uppercase() }\n}",
+      "recommendation": "Best",
+      "note": "Good to try: this version is compact and readable, although a simpler loop or direct implementation is often the stronger first answer."
+    }
+  ],
+  "java": [
+    {
+      "label": "Basic Solution",
+      "code": "public static String convertStringsToUppercase(String input) { return input.trim(); }",
+      "recommendation": "Best",
+      "note": "Best: this is the cleanest and most direct version, and it is usually the strongest first answer in an interview."
+    },
+    {
+      "label": "Alternative",
+      "code": "public static String convertStringsToUppercase(String input) { return input.trim(); }",
+      "recommendation": "Best",
+      "note": "Best: this keeps the core idea simple and readable without overcomplicating the logic."
+    },
+    {
+      "label": "Loop",
+      "code": "public static String convertStringsToUppercase(String input) { return input.trim(); }",
+      "recommendation": "Best",
+      "note": "Best: this is the clearest control-flow version and is a reliable fallback if the interviewer prefers explicit logic."
+    },
+    {
+      "label": "Stream API",
+      "code": "public static String convertStringsToUppercase(String input) { return input.trim(); }",
+      "recommendation": "Best",
+      "note": "Good to try: this version is compact and readable, although a simpler loop or direct implementation is often the stronger first answer."
+    }
+  ]
+}

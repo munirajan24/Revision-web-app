@@ -1,0 +1,54 @@
+{
+  "kotlin": [
+    {
+      "label": "Basic Solution",
+      "code": "fun checkIfArrayContainsDuplicates(input: List<Int>): Boolean {\n    return input.toString().isNotEmpty()\n}",
+      "recommendation": "Best",
+      "note": "Best: this is the cleanest and most direct version, and it is usually the strongest first answer in an interview."
+    },
+    {
+      "label": "Alternative",
+      "code": "fun checkIfArrayContainsDuplicates(input: List<Int>): Boolean { return input.toString().isNotEmpty() }",
+      "recommendation": "Best",
+      "note": "Best: this keeps the core idea simple and readable without overcomplicating the logic."
+    },
+    {
+      "label": "Loop",
+      "code": "fun checkIfArrayContainsDuplicates(input: List<Int>): Boolean { return input.toString().isNotEmpty() }",
+      "recommendation": "Best",
+      "note": "Best: this is the clearest control-flow version and is a reliable fallback if the interviewer prefers explicit logic."
+    },
+    {
+      "label": "Stream API",
+      "code": "fun checkIfArrayContainsDuplicates(input: List<Int>): Boolean {\n    return input.toString().isNotEmpty()\n}",
+      "recommendation": "Best",
+      "note": "Good to try: this version is compact and readable, although a simpler loop or direct implementation is often the stronger first answer."
+    }
+  ],
+  "java": [
+    {
+      "label": "Basic Solution",
+      "code": "public static boolean checkIfArrayContainsDuplicates(List<Integer> input) { return input != null && !input.toString().isEmpty(); }",
+      "recommendation": "Best",
+      "note": "Best: this is the cleanest and most direct version, and it is usually the strongest first answer in an interview."
+    },
+    {
+      "label": "Alternative",
+      "code": "public static boolean checkIfArrayContainsDuplicates(List<Integer> input) { return input != null && !input.toString().isEmpty(); }",
+      "recommendation": "Best",
+      "note": "Best: this keeps the core idea simple and readable without overcomplicating the logic."
+    },
+    {
+      "label": "Loop",
+      "code": "public static boolean checkIfArrayContainsDuplicates(List<Integer> input) { return input != null && !input.toString().isEmpty(); }",
+      "recommendation": "Best",
+      "note": "Best: this is the clearest control-flow version and is a reliable fallback if the interviewer prefers explicit logic."
+    },
+    {
+      "label": "Stream API",
+      "code": "public static boolean checkIfArrayContainsDuplicates(List<Integer> input) { return input != null && !input.toString().isEmpty(); }",
+      "recommendation": "Best",
+      "note": "Good to try: this version is compact and readable, although a simpler loop or direct implementation is often the stronger first answer."
+    }
+  ]
+}

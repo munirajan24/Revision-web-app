@@ -1,0 +1,54 @@
+{
+  "kotlin": [
+    {
+      "label": "Basic Solution",
+      "code": "fun moveAllZerosToTheEnd(input: List<Int>): List<Int> {\n    return input.filter { it != 0 } + input.filter { it == 0 }\n}",
+      "recommendation": "Best",
+      "note": "Best: this is the cleanest and most direct version, and it is usually the strongest first answer in an interview."
+    },
+    {
+      "label": "Alternative",
+      "code": "fun moveAllZerosToTheEnd(input: List<Int>): List<Int> {\n    val result = input.toMutableList()\n    var write = 0\n    for (value in result) {\n        if (value != 0) {\n            result[write++] = value\n        }\n    }\n    while (write < result.size) result[write++] = 0\n    return result\n\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: this is a valid backup and easy to explain, but the simplest direct solution usually reads better in an interview."
+    },
+    {
+      "label": "Loop",
+      "code": "fun moveAllZerosToTheEnd(input: List<Int>): List<Int> {\n    val result = input.toMutableList()\n    val nonZero = mutableListOf<Int>()\n    val zeros = mutableListOf<Int>()\n    for (value in result) {\n        if (value == 0) zeros.add(value) else nonZero.add(value)\n    }\n    return nonZero + zeros\n\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: the explicit loop is easy to reason about, which makes it a strong backup when the interviewer wants to see every step."
+    },
+    {
+      "label": "Stream API",
+      "code": "fun moveAllZerosToTheEnd(input: List<Int>): List<Int> {\n    return input.asSequence().filter { it != 0 }.toList() + input.asSequence().filter { it == 0 }.toList()\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: this is concise and elegant, but it is usually a second-choice answer unless the problem is clearly built for a collection pipeline."
+    }
+  ],
+  "java": [
+    {
+      "label": "Basic Solution",
+      "code": "public static List<Integer> moveAllZerosToTheEnd(List<Integer> input) {\n    List<Integer> result = new ArrayList<>(input);\n    result.removeIf(value -> value == 0);\n    while (result.size() < input.size()) result.add(0);\n    return result;\n\n}",
+      "recommendation": "Best",
+      "note": "Best: this is the cleanest and most direct version, and it is usually the strongest first answer in an interview."
+    },
+    {
+      "label": "Alternative",
+      "code": "public static List<Integer> moveAllZerosToTheEnd(List<Integer> input) {\n    List<Integer> result = new ArrayList<>(input);\n    int write = 0;\n    for (int value : result) {\n        if (value != 0) {\n            result.set(write++, value);\n        }\n    }\n    while (write < result.size()) {\n        result.set(write++, 0);\n    }\n    return result;\n\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: this is a valid backup and easy to explain, but the simplest direct solution usually reads better in an interview."
+    },
+    {
+      "label": "Loop",
+      "code": "public static List<Integer> moveAllZerosToTheEnd(List<Integer> input) {\n    List<Integer> nonZero = new ArrayList<>();\n    List<Integer> zeros = new ArrayList<>();\n    for (int value : input) {\n        if (value == 0) zeros.add(value);\n        else nonZero.add(value);\n    }\n    nonZero.addAll(zeros);\n    return nonZero;\n\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: the explicit loop is easy to reason about, which makes it a strong backup when the interviewer wants to see every step."
+    },
+    {
+      "label": "Stream API",
+      "code": "public static List<Integer> moveAllZerosToTheEnd(List<Integer> input) {\n    List<Integer> nonZero = input.stream().filter(value -> value != 0).collect(Collectors.toList());\n    List<Integer> zeros = input.stream().filter(value -> value == 0).collect(Collectors.toList());\n    nonZero.addAll(zeros);\n    return nonZero;\n\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: this is concise and elegant, but it is usually a second-choice answer unless the problem is clearly built for a collection pipeline."
+    }
+  ]
+}

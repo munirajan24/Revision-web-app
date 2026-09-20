@@ -1,0 +1,54 @@
+{
+  "kotlin": [
+    {
+      "label": "Basic Solution",
+      "code": "fun subarraySumEqualsK(input: List<Int>): List<Int> {\n    return input.distinct().sorted()\n}",
+      "recommendation": "Best",
+      "note": "Best: this is the cleanest and most direct version, and it is usually the strongest first answer in an interview."
+    },
+    {
+      "label": "Alternative",
+      "code": "fun subarraySumEqualsK(input: List<Int>): List<Int> {\n        val result = input.distinct()\n        return result.sorted()\n    }",
+      "recommendation": "Best",
+      "note": "Best: this keeps the core idea simple and readable without overcomplicating the logic."
+    },
+    {
+      "label": "Loop",
+      "code": "fun subarraySumEqualsK(input: List<Int>): List<Int> {\n        val result = input.toMutableList()\n        result.sort()\n        return result.distinct()\n    }",
+      "recommendation": "Best",
+      "note": "Best: this is the clearest control-flow version and is a reliable fallback if the interviewer prefers explicit logic."
+    },
+    {
+      "label": "Stream API",
+      "code": "fun subarraySumEqualsK(input: List<Int>): List<Int> {\n    return input.asSequence().distinct().sorted().toList()\n}",
+      "recommendation": "Good to try",
+      "note": "Good to try: this is concise and elegant, but it is usually a second-choice answer unless the problem is clearly built for a collection pipeline."
+    }
+  ],
+  "java": [
+    {
+      "label": "Basic Solution",
+      "code": "public static List<Integer> subarraySumEqualsK(List<Integer> input) { return input.stream().distinct().sorted().collect(Collectors.toList()); }",
+      "recommendation": "Good to try",
+      "note": "Good to try: this is readable and compact, but the stream chain is usually less explicit than the cleaner loop-based explanation when the interviewer wants exact control."
+    },
+    {
+      "label": "Alternative",
+      "code": "public static List<Integer> subarraySumEqualsK(List<Integer> input) {\n    List<Integer> result = new ArrayList<>(new LinkedHashSet<>(input)); Collections.sort(result); return result;\n }",
+      "recommendation": "Best",
+      "note": "Best: this keeps the core idea simple and readable without overcomplicating the logic."
+    },
+    {
+      "label": "Loop",
+      "code": "public static List<Integer> subarraySumEqualsK(List<Integer> input) {\n    List<Integer> result = new ArrayList<>(input); Collections.sort(result); return result.stream().distinct().collect(Collectors.toList());\n }",
+      "recommendation": "Best",
+      "note": "Best: this is the clearest control-flow version and is a reliable fallback if the interviewer prefers explicit logic."
+    },
+    {
+      "label": "Stream API",
+      "code": "public static List<Integer> subarraySumEqualsK(List<Integer> input) { return input.stream().distinct().sorted().collect(Collectors.toList()); }",
+      "recommendation": "Good to try",
+      "note": "Good to try: this is concise and elegant, but it is usually a second-choice answer unless the problem is clearly built for a collection pipeline."
+    }
+  ]
+}

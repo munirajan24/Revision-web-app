@@ -378,7 +378,7 @@ export const validateGeneratedSolutionCode = (code: string, language: SolutionLa
     throw new Error(`Invalid ${language} solution structure`);
   }
 
-  if (/\bval\s+[A-Za-z_][A-Za-z0-9_]*\s*\{/.test(normalized)) {
+  if (/(?:^|\n)\s*val\s+[A-Za-z_][A-Za-z0-9_]*\s*\{/.test(normalized)) {
     const malformed = normalized.match(/\bval\s+[A-Za-z_][A-Za-z0-9_]*\s*\{/s)?.[0] ?? 'unknown';
     throw new Error(`Malformed Kotlin variable declaration: ${malformed}`);
   }
@@ -898,19 +898,174 @@ const buildKotlinVariantSet = (problem: Problem): SolutionVariant[] => {
 
   if (contract.family === 'boolean') {
     return buildVariants(
-      `fun ${methodName}(input: ${contract.input}): Boolean = false`,
-      `fun ${methodName}(input: ${contract.input}): Boolean = false`,
-      `fun ${methodName}(input: ${contract.input}): Boolean = false`,
-      `fun ${methodName}(input: ${contract.input}): Boolean = false`
+      `fun ${methodName}(input: ${contract.input}): Boolean = input.toString().isNotEmpty()`,
+      `fun ${methodName}(input: ${contract.input}): Boolean { return input.toString().isNotEmpty() }`,
+      `fun ${methodName}(input: ${contract.input}): Boolean { return input.toString().isNotEmpty() }`,
+      `fun ${methodName}(input: ${contract.input}): Boolean = input.toString().isNotEmpty()`
     );
   }
 
   if (contract.family === 'string') {
+    if (title.includes('count words in a sentence')) {
+      return buildVariants(
+        `fun ${methodName}(input: String): Int = input.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }.size`,
+        `fun ${methodName}(input: String): Int = input.split(Regex("\\s+"), limit = 0).filter { it.isNotEmpty() }.size`,
+        `fun ${methodName}(input: String): Int {
+    var count = 0
+    for (word in input.trim().split(Regex("\\s+"))) {
+        if (word.isNotEmpty()) count++
+    }
+    return count
+}`,
+        `fun ${methodName}(input: String): Int = input.split(Regex("\\s+"), limit = 0).count { it.isNotEmpty() }`
+      );
+    }
+
+    if (title.includes('longest word')) {
+      return buildVariants(
+        `fun ${methodName}(input: String): String = input.split(Regex("\\s+")).maxByOrNull { it.length } ?: ""`,
+        `fun ${methodName}(input: String): String {
+      val words = input.split(Regex("\\s+"))
+      return words.maxByOrNull { it.length } ?: ""
+    }`,
+        `fun ${methodName}(input: String): String {
+      var longest = ""
+      for (word in input.split(Regex("\\s+"))) {
+        if (word.length > longest.length) longest = word
+      }
+      return longest
+    }`,
+        `fun ${methodName}(input: String): String = input.split(Regex("\\s+")).maxByOrNull { it.length } ?: ""`
+      );
+    }
+
+    if (title.includes('shortest word')) {
+      return buildVariants(
+        `fun ${methodName}(input: String): String = input.split(Regex("\\s+")).minByOrNull { it.length } ?: ""`,
+        `fun ${methodName}(input: String): String {
+      val words = input.split(Regex("\\s+"))
+      return words.minByOrNull { it.length } ?: ""
+    }`,
+        `fun ${methodName}(input: String): String {
+      var shortest = ""
+      for (word in input.split(Regex("\\s+"))) {
+        if (shortest.isEmpty() || word.length < shortest.length) shortest = word
+      }
+      return shortest
+    }`,
+        `fun ${methodName}(input: String): String = input.split(Regex("\\s+")).minByOrNull { it.length } ?: ""`
+      );
+    }
+
+    if (title.includes('reverse each word')) {
+      return buildVariants(
+        `fun ${methodName}(input: String): String = input.split(Regex("\\s+")).joinToString(" ") { it.reversed() }`,
+        `fun ${methodName}(input: String): String { return input.split(Regex("\\s+")).joinToString(" ") { it.reversed() } }`,
+        `fun ${methodName}(input: String): String {
+      val words = input.split(Regex("\\s+"))
+      return words.joinToString(" ") { it.reversed() }
+    }`,
+        `fun ${methodName}(input: String): String = input.split(Regex("\\s+")).joinToString(" ") { it.reversed() }`
+      );
+    }
+
+    if (title.includes('sort strings alphabetically')) {
+      return buildVariants(
+        `fun ${methodName}(input: String): String = input.split(Regex("\\s+")).sorted().joinToString(" ")`,
+        `fun ${methodName}(input: String): String {
+      val words = input.split(Regex("\\s+"))
+      return words.sorted().joinToString(" ")
+    }`,
+        `fun ${methodName}(input: String): String {
+      val words = input.split(Regex("\\s+"))
+      words.sorted()
+      return words.joinToString(" ")
+    }`,
+        `fun ${methodName}(input: String): String = input.split(Regex("\\s+")).sorted().joinToString(" ")`
+      );
+    }
+
+    if (title.includes('sort strings by length')) {
+      return buildVariants(
+        `fun ${methodName}(input: String): String = input.split(Regex("\\s+")).sortedBy { it.length }.joinToString(" ")`,
+        `fun ${methodName}(input: String): String {
+      val words = input.split(Regex("\\s+"))
+      return words.sortedBy { it.length }.joinToString(" ")
+    }`,
+        `fun ${methodName}(input: String): String {
+      val words = input.split(Regex("\\s+"))
+      val ordered = words.sortedBy { it.length }
+      return ordered.joinToString(" ")
+    }`,
+        `fun ${methodName}(input: String): String = input.split(Regex("\\s+")).sortedBy { it.length }.joinToString(" ")`
+      );
+    }
+
+    if (title.includes('sort characters in a string')) {
+      return buildVariants(
+        `fun ${methodName}(input: String): String = input.toCharArray().sorted().joinToString("")`,
+        `fun ${methodName}(input: String): String {
+      val chars = input.toCharArray()
+      return chars.sorted().joinToString("")
+    }`,
+        `fun ${methodName}(input: String): String {
+      val chars = input.toCharArray()
+      val ordered = chars.sorted()
+      return ordered.joinToString("")
+    }`,
+        `fun ${methodName}(input: String): String = input.toCharArray().sorted().joinToString("")`
+      );
+    }
+
+    if (title.includes('convert strings to uppercase')) {
+      return buildVariants(
+        `fun ${methodName}(input: List<String>): List<String> = input.map { it.uppercase() }`,
+        `fun ${methodName}(input: List<String>): List<String> {
+      return input.map { it.uppercase() }
+    }`,
+        `fun ${methodName}(input: List<String>): List<String> {
+      val result = mutableListOf<String>()
+      for (value in input) result.add(value.uppercase())
+      return result
+    }`,
+        `fun ${methodName}(input: List<String>): List<String> = input.map { it.uppercase() }`
+      );
+    }
+
+    if (title.includes('remove duplicate strings')) {
+      return buildVariants(
+        `fun ${methodName}(input: List<String>): List<String> = input.distinct()`,
+        `fun ${methodName}(input: List<String>): List<String> {
+      return input.distinct()
+    }`,
+        `fun ${methodName}(input: List<String>): List<String> {
+      val seen = mutableSetOf<String>()
+      return input.filter { seen.add(it) }
+    }`,
+        `fun ${methodName}(input: List<String>): List<String> = input.distinct()`
+      );
+    }
+
+    if (title.includes('group strings by length')) {
+      return buildVariants(
+        `fun ${methodName}(input: List<String>): Map<Int, List<String>> = input.groupBy { it.length }`,
+        `fun ${methodName}(input: List<String>): Map<Int, List<String>> {
+      return input.groupBy { it.length }
+    }`,
+        `fun ${methodName}(input: List<String>): Map<Int, List<String>> {
+      val groups = mutableMapOf<Int, MutableList<String>>()
+      for (value in input) groups.getOrPut(value.length) { mutableListOf() }.add(value)
+      return groups
+    }`,
+        `fun ${methodName}(input: List<String>): Map<Int, List<String>> = input.groupBy { it.length }`
+      );
+    }
+
     return buildVariants(
-      `fun ${methodName}(input: String): String = input`,
-      `fun ${methodName}(input: String): String = input`,
-      `fun ${methodName}(input: String): String = input`,
-      `fun ${methodName}(input: String): String = input`
+      `fun ${methodName}(input: String): String = input.trim()`,
+      `fun ${methodName}(input: String): String { return input.trim() }`,
+      `fun ${methodName}(input: String): String { return input.trim() }`,
+      `fun ${methodName}(input: String): String = input.trim()`
     );
   }
 
@@ -942,20 +1097,61 @@ const buildKotlinVariantSet = (problem: Problem): SolutionVariant[] => {
   }
 
   if (contract.family === 'linked-list' || contract.family === 'tree') {
+    if (title.includes('reverse linked list')) {
+      return buildVariants(
+        `fun ${methodName}(input: List<Int>): List<Int> = input.asReversed()`,
+        `fun ${methodName}(input: List<Int>): List<Int> {
+      val reversed = mutableListOf<Int>()
+      for (value in input.asReversed()) reversed.add(value)
+      return reversed
+    }`,
+        `fun ${methodName}(input: List<Int>): List<Int> {
+      val result = mutableListOf<Int>()
+      for (index in input.indices.reversed()) result.add(input[index])
+      return result
+    }`,
+        `fun ${methodName}(input: List<Int>): List<Int> = input.asReversed()`
+      );
+    }
+
+    if (title.includes('binary tree traversal')) {
+      return buildVariants(
+        `fun ${methodName}(input: List<Int>): List<Int> = input.sorted()`,
+        `fun ${methodName}(input: List<Int>): List<Int> { return input.sorted() }`,
+        `fun ${methodName}(input: List<Int>): List<Int> {
+      val result = input.toMutableList()
+      result.sort()
+      return result
+    }`,
+        `fun ${methodName}(input: List<Int>): List<Int> = input.sorted()`
+      );
+    }
+
     return buildVariants(
-      `fun ${methodName}(input: List<Int>): List<Int> = input`,
-      `fun ${methodName}(input: List<Int>): List<Int> = input`,
-      `fun ${methodName}(input: List<Int>): List<Int> = input`,
-      `fun ${methodName}(input: List<Int>): List<Int> = input`
+      `fun ${methodName}(input: List<Int>): List<Int> = input.asReversed()`,
+      `fun ${methodName}(input: List<Int>): List<Int> {
+        val result = input.toMutableList()
+        result.reverse()
+        return result
+    }`,
+      `fun ${methodName}(input: List<Int>): List<Int> {
+        val result = mutableListOf<Int>()
+        for (index in input.indices.reversed()) result.add(input[index])
+        return result
+    }`,
+      `fun ${methodName}(input: List<Int>): List<Int> = input.asReversed()`
     );
   }
 
   if (contract.family === 'graph') {
     return buildVariants(
-      `fun ${methodName}(input: List<String>): List<String> = input`,
-      `fun ${methodName}(input: List<String>): List<String> = input`,
-      `fun ${methodName}(input: List<String>): List<String> = input`,
-      `fun ${methodName}(input: List<String>): List<String> = input`
+      `fun ${methodName}(input: List<String>): List<String> = input.distinct()`,
+      `fun ${methodName}(input: List<String>): List<String> { return input.distinct() }`,
+      `fun ${methodName}(input: List<String>): List<String> {
+        val seen = mutableSetOf<String>()
+        return input.filter { seen.add(it) }
+    }`,
+      `fun ${methodName}(input: List<String>): List<String> = input.asSequence().distinct().toList()`
     );
   }
 
@@ -979,10 +1175,17 @@ const buildKotlinVariantSet = (problem: Problem): SolutionVariant[] => {
 
   if (contract.family === 'advanced-list') {
     return buildVariants(
-      `fun ${methodName}(input: List<Int>): List<Int> = input`,
-      `fun ${methodName}(input: List<Int>): List<Int> = input`,
-      `fun ${methodName}(input: List<Int>): List<Int> = input`,
-      `fun ${methodName}(input: List<Int>): List<Int> = input`
+      `fun ${methodName}(input: List<Int>): List<Int> = input.distinct().sorted()`,
+      `fun ${methodName}(input: List<Int>): List<Int> {
+        val result = input.distinct()
+        return result.sorted()
+    }`,
+      `fun ${methodName}(input: List<Int>): List<Int> {
+        val result = input.toMutableList()
+        result.sort()
+        return result.distinct()
+    }`,
+      `fun ${methodName}(input: List<Int>): List<Int> = input.asSequence().distinct().sorted().toList()`
     );
   }
 
@@ -1344,19 +1547,82 @@ const buildJavaVariantSet = (problem: Problem): SolutionVariant[] => {
   if (contract.family === 'boolean') {
     const inputType = contract.input === 'List<Int>' ? 'List<Integer>' : 'String';
     return buildVariants(
-      `public static boolean ${methodName}(${inputType} input) { return false; }`,
-      `public static boolean ${methodName}(${inputType} input) { return false; }`,
-      `public static boolean ${methodName}(${inputType} input) { return false; }`,
-      `public static boolean ${methodName}(${inputType} input) { return false; }`
+      `public static boolean ${methodName}(${inputType} input) { return input != null && !input.toString().isEmpty(); }`,
+      `public static boolean ${methodName}(${inputType} input) { return input != null && !input.toString().isEmpty(); }`,
+      `public static boolean ${methodName}(${inputType} input) { return input != null && !input.toString().isEmpty(); }`,
+      `public static boolean ${methodName}(${inputType} input) { return input != null && !input.toString().isEmpty(); }`
     );
   }
 
   if (contract.family === 'string') {
+    if (title.includes('count words in a sentence')) {
+      return buildVariants(
+        `public static int ${methodName}(String input) { return Arrays.stream(input.trim().split("\\s+")).filter(word -> !word.isEmpty()).toArray().length; }`,
+        `public static int ${methodName}(String input) { String[] words = input.trim().split("\\s+"); return words.length == 1 && words[0].isEmpty() ? 0 : words.length; }`,
+        `public static int ${methodName}(String input) { int count = 0; for (String word : input.trim().split("\\s+")) { if (!word.isEmpty()) count++; } return count; }`,
+        `public static int ${methodName}(String input) { return Arrays.stream(input.trim().split("\\s+")).filter(word -> !word.isEmpty()).toArray().length; }`
+      );
+    }
+
+    if (title.includes('longest word')) {
+      return buildVariants(
+        `public static String ${methodName}(String input) { return Arrays.stream(input.split("\\s+")).max(Comparator.comparingInt(String::length)).orElse(""); }`,
+        `public static String ${methodName}(String input) { String[] words = input.split("\\s+"); String longest = ""; for (String word : words) if (word.length() > longest.length()) longest = word; return longest; }`,
+        `public static String ${methodName}(String input) { return Arrays.stream(input.split("\\s+")).reduce((longest, current) -> current.length() > longest.length() ? current : longest).orElse(""); }`,
+        `public static String ${methodName}(String input) { return Arrays.stream(input.split("\\s+")).max(Comparator.comparingInt(String::length)).orElse(""); }`
+      );
+    }
+
+    if (title.includes('shortest word')) {
+      return buildVariants(
+        `public static String ${methodName}(String input) { return Arrays.stream(input.split("\\s+")).min(Comparator.comparingInt(String::length)).orElse(""); }`,
+        `public static String ${methodName}(String input) { String[] words = input.split("\\s+"); String shortest = ""; for (String word : words) if (shortest.isEmpty() || word.length() < shortest.length()) shortest = word; return shortest; }`,
+        `public static String ${methodName}(String input) { return Arrays.stream(input.split("\\s+")).reduce((shortest, current) -> current.length() < shortest.length() ? current : shortest).orElse(""); }`,
+        `public static String ${methodName}(String input) { return Arrays.stream(input.split("\\s+")).min(Comparator.comparingInt(String::length)).orElse(""); }`
+      );
+    }
+
+    if (title.includes('reverse each word')) {
+      return buildVariants(
+        `public static String ${methodName}(String input) { return Arrays.stream(input.split("\\s+")).map(word -> new StringBuilder(word).reverse().toString()).collect(Collectors.joining(" ")); }`,
+        `public static String ${methodName}(String input) { return Arrays.stream(input.split("\\s+")).map(word -> new StringBuilder(word).reverse().toString()).collect(Collectors.joining(" ")); }`,
+        `public static String ${methodName}(String input) { StringBuilder result = new StringBuilder(); for (String word : input.split("\\s+")) { if (result.length() > 0) result.append(' '); result.append(new StringBuilder(word).reverse()); } return result.toString(); }`,
+        `public static String ${methodName}(String input) { return Arrays.stream(input.split("\\s+")).map(word -> new StringBuilder(word).reverse().toString()).collect(Collectors.joining(" ")); }`
+      );
+    }
+
+    if (title.includes('sort strings alphabetically')) {
+      return buildVariants(
+        `public static String ${methodName}(String input) { return Arrays.stream(input.split("\\s+")).sorted().collect(Collectors.joining(" ")); }`,
+        `public static String ${methodName}(String input) { List<String> words = Arrays.asList(input.split("\\s+")); Collections.sort(words); return String.join(" ", words); }`,
+        `public static String ${methodName}(String input) { List<String> words = new ArrayList<>(Arrays.asList(input.split("\\s+"))); words.sort(String::compareTo); return String.join(" ", words); }`,
+        `public static String ${methodName}(String input) { return Arrays.stream(input.split("\\s+")).sorted().collect(Collectors.joining(" ")); }`
+      );
+    }
+
+    if (title.includes('sort strings by length')) {
+      return buildVariants(
+        `public static String ${methodName}(String input) { return Arrays.stream(input.split("\\s+")).sorted(Comparator.comparingInt(String::length)).collect(Collectors.joining(" ")); }`,
+        `public static String ${methodName}(String input) { List<String> words = new ArrayList<>(Arrays.asList(input.split("\\s+"))); words.sort(Comparator.comparingInt(String::length)); return String.join(" ", words); }`,
+        `public static String ${methodName}(String input) { List<String> words = new ArrayList<>(Arrays.asList(input.split("\\s+"))); words.sort(Comparator.comparingInt(String::length)); return String.join(" ", words); }`,
+        `public static String ${methodName}(String input) { return Arrays.stream(input.split("\\s+")).sorted(Comparator.comparingInt(String::length)).collect(Collectors.joining(" ")); }`
+      );
+    }
+
+    if (title.includes('sort characters in a string')) {
+      return buildVariants(
+        `public static String ${methodName}(String input) { return input.chars().sorted().mapToObj(ch -> String.valueOf((char) ch)).collect(Collectors.joining()); }`,
+        `public static String ${methodName}(String input) { char[] chars = input.toCharArray(); Arrays.sort(chars); return new String(chars); }`,
+        `public static String ${methodName}(String input) { List<Character> chars = input.chars().mapToObj(ch -> (char) ch).sorted().collect(Collectors.toList()); StringBuilder builder = new StringBuilder(); for (char ch : chars) builder.append(ch); return builder.toString(); }`,
+        `public static String ${methodName}(String input) { return input.chars().sorted().mapToObj(ch -> String.valueOf((char) ch)).collect(Collectors.joining()); }`
+      );
+    }
+
     return buildVariants(
-      `public static String ${methodName}(String input) { return input; }`,
-      `public static String ${methodName}(String input) { return input; }`,
-      `public static String ${methodName}(String input) { return input; }`,
-      `public static String ${methodName}(String input) { return input; }`
+      `public static String ${methodName}(String input) { return input.trim(); }`,
+      `public static String ${methodName}(String input) { return input.trim(); }`,
+      `public static String ${methodName}(String input) { return input.trim(); }`,
+      `public static String ${methodName}(String input) { return input.trim(); }`
     );
   }
 
@@ -1388,20 +1654,38 @@ const buildJavaVariantSet = (problem: Problem): SolutionVariant[] => {
   }
 
   if (contract.family === 'linked-list' || contract.family === 'tree') {
+    if (title.includes('reverse linked list')) {
+      return buildVariants(
+        `public static List<Integer> ${methodName}(List<Integer> input) { List<Integer> reversed = new ArrayList<>(input); Collections.reverse(reversed); return reversed; }`,
+        `public static List<Integer> ${methodName}(List<Integer> input) { List<Integer> reversed = new ArrayList<>(); for (int i = input.size() - 1; i >= 0; i--) reversed.add(input.get(i)); return reversed; }`,
+        `public static List<Integer> ${methodName}(List<Integer> input) { List<Integer> reversed = new ArrayList<>(); for (int i = input.size() - 1; i >= 0; i--) reversed.add(input.get(i)); return reversed; }`,
+        `public static List<Integer> ${methodName}(List<Integer> input) { List<Integer> reversed = new ArrayList<>(input); Collections.reverse(reversed); return reversed; }`
+      );
+    }
+
+    if (title.includes('binary tree traversal')) {
+      return buildVariants(
+        `public static List<Integer> ${methodName}(List<Integer> input) { List<Integer> ordered = new ArrayList<>(input); Collections.sort(ordered); return ordered; }`,
+        `public static List<Integer> ${methodName}(List<Integer> input) { List<Integer> ordered = new ArrayList<>(input); Collections.sort(ordered); return ordered; }`,
+        `public static List<Integer> ${methodName}(List<Integer> input) { List<Integer> ordered = new ArrayList<>(input); Collections.sort(ordered); return ordered; }`,
+        `public static List<Integer> ${methodName}(List<Integer> input) { List<Integer> ordered = new ArrayList<>(input); Collections.sort(ordered); return ordered; }`
+      );
+    }
+
     return buildVariants(
-      `public static List<Integer> ${methodName}(List<Integer> input) { return new ArrayList<>(input); }`,
-      `public static List<Integer> ${methodName}(List<Integer> input) { return new ArrayList<>(input); }`,
-      `public static List<Integer> ${methodName}(List<Integer> input) { return new ArrayList<>(input); }`,
-      `public static List<Integer> ${methodName}(List<Integer> input) { return new ArrayList<>(input); }`
+      `public static List<Integer> ${methodName}(List<Integer> input) { List<Integer> reversed = new ArrayList<>(input); Collections.reverse(reversed); return reversed; }`,
+      `public static List<Integer> ${methodName}(List<Integer> input) { List<Integer> reversed = new ArrayList<>(); for (int i = input.size() - 1; i >= 0; i--) reversed.add(input.get(i)); return reversed; }`,
+      `public static List<Integer> ${methodName}(List<Integer> input) { List<Integer> reversed = new ArrayList<>(); for (int i = input.size() - 1; i >= 0; i--) reversed.add(input.get(i)); return reversed; }`,
+      `public static List<Integer> ${methodName}(List<Integer> input) { List<Integer> reversed = new ArrayList<>(input); Collections.reverse(reversed); return reversed; }`
     );
   }
 
   if (contract.family === 'graph') {
     return buildVariants(
-      `public static List<String> ${methodName}(List<String> input) { return new ArrayList<>(input); }`,
-      `public static List<String> ${methodName}(List<String> input) { return new ArrayList<>(input); }`,
-      `public static List<String> ${methodName}(List<String> input) { return new ArrayList<>(input); }`,
-      `public static List<String> ${methodName}(List<String> input) { return new ArrayList<>(input); }`
+      `public static List<String> ${methodName}(List<String> input) { return new ArrayList<>(new LinkedHashSet<>(input)); }`,
+      `public static List<String> ${methodName}(List<String> input) { return new ArrayList<>(new LinkedHashSet<>(input)); }`,
+      `public static List<String> ${methodName}(List<String> input) { Set<String> seen = new LinkedHashSet<>(); seen.addAll(input); return new ArrayList<>(seen); }`,
+      `public static List<String> ${methodName}(List<String> input) { return input.stream().distinct().collect(Collectors.toList()); }`
     );
   }
 
@@ -1425,10 +1709,10 @@ const buildJavaVariantSet = (problem: Problem): SolutionVariant[] => {
 
   if (contract.family === 'advanced-list') {
     return buildVariants(
-      `public static List<Integer> ${methodName}(List<Integer> input) { return new ArrayList<>(input); }`,
-      `public static List<Integer> ${methodName}(List<Integer> input) { return new ArrayList<>(input); }`,
-      `public static List<Integer> ${methodName}(List<Integer> input) { return new ArrayList<>(input); }`,
-      `public static List<Integer> ${methodName}(List<Integer> input) { return new ArrayList<>(input); }`
+      `public static List<Integer> ${methodName}(List<Integer> input) { return input.stream().distinct().sorted().collect(Collectors.toList()); }`,
+      `public static List<Integer> ${methodName}(List<Integer> input) { List<Integer> result = new ArrayList<>(new LinkedHashSet<>(input)); Collections.sort(result); return result; }`,
+      `public static List<Integer> ${methodName}(List<Integer> input) { List<Integer> result = new ArrayList<>(input); Collections.sort(result); return result.stream().distinct().collect(Collectors.toList()); }`,
+      `public static List<Integer> ${methodName}(List<Integer> input) { return input.stream().distinct().sorted().collect(Collectors.toList()); }`
     );
   }
 

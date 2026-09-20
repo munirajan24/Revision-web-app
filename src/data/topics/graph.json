@@ -1,1 +1,14 @@
-[{"id":118,"title":"BFS"},{"id":119,"title":"DFS"},{"id":120,"title":"Number of Islands"}]
+[
+    {
+        "id": 118,
+        "title": "BFS"
+    },
+    {
+        "id": 119,
+        "title": "DFS"
+    },
+    {
+        "id": 120,
+        "title": "Number of Islands"
+    }
+]

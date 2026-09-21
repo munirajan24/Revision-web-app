@@ -2016,23 +2016,56 @@ export const getLearningFlow = (problem: Problem): string[] => {
   return ['Start', 'Read the input', `Use ${pattern.toLowerCase()}`, `Update ${state}`, 'Return the answer'];
 };
 
-export const getSolutionFlow = (problem: Problem, label: string): string[] => {
+export const getSolutionFlow = (problem: Problem, label: string, code = ''): string[] => {
   const state = problem.keywords[0] ?? problem.concepts[0] ?? 'the result';
   const normalizedLabel = label.toLowerCase();
+  const normalizedCode = code.toLowerCase();
+  const operations: string[] = [];
+
+  if (/\.split\s*\(|split\s*\(/.test(normalizedCode)) {
+    operations.push('Split the input with `split(...)`');
+  }
+  if (/\.filter\s*\(|filter\s*\{/.test(normalizedCode)) {
+    operations.push('Filter values with `filter(...)`');
+  }
+  if (/\.map\s*\(|map\s*\{/.test(normalizedCode)) {
+    operations.push('Transform each value with `map(...)`');
+  }
+  if (/\.sorted(?:by|descending)?\s*\(|collections\.sort|\.sort\s*\(/.test(normalizedCode)) {
+    operations.push('Sort the values before returning them');
+  }
+  if (/groupingby|groupby\s*\(|groupingby\s*\(/.test(normalizedCode)) {
+    operations.push('Group values with `groupBy`/`groupingBy`');
+  }
+  if (/distinct\s*\(|hashset|linkedhashset/.test(normalizedCode)) {
+    operations.push('Remove duplicates with `distinct()` or a set');
+  }
+  if (/groupingby|eachcount|frequency|hashmap|mutablemapof|\.getorput\s*\(/.test(normalizedCode)) {
+    operations.push('Track counts or lookups with a map');
+  }
+  if (/\.tolist\s*\(|collect\(collectors\.tolist\(\)/.test(normalizedCode)) {
+    operations.push('Convert the values to a list with `toList()`');
+  } else if (/join tostring|jointostring|collect\(collectors\.joining/.test(normalizedCode)) {
+    operations.push('Join the values into the final string');
+  }
+
+  if (operations.length > 0) {
+    return ['Input data', ...operations, 'Print Result'];
+  }
 
   if (normalizedLabel.includes('stream')) {
-    return ['Create a stream', 'Apply the needed operations', 'Collect the result', 'Return the answer'];
+    return ['Input data', 'Create a stream', 'Apply the collection operations', 'Collect the result', 'Print Result'];
   }
 
   if (normalizedLabel.includes('loop')) {
-    return ['Create the result state', 'Visit each input item', `Update ${state} when needed`, 'Return the answer'];
+    return ['Input data', 'Visit each input item', `Update ${state} when needed`, 'Print Result'];
   }
 
   if (normalizedLabel.includes('alternative')) {
-    return ['Read the input', 'Convert to a useful form', `Process ${state}`, 'Return the answer'];
+    return ['Input data', `Apply the ${state} operation`, 'Build the intermediate result', 'Print Result'];
   }
 
-  return getLearningFlow(problem);
+  return ['Input data', 'Scan the input', 'Track counts or seen values', 'Filter the result', 'Print Result'];
 };
 
 export const getSolutionComplexity = (problem: Problem, code: string): SolutionComplexity => {

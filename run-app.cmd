@@ -19,6 +19,22 @@ if not exist node_modules (
     )
 )
 
-echo Starting Revision App...
-start "" http://localhost:4176
-call npm run dev -- --host 0.0.0.0 --port 4176
+for /f %%p in ('powershell -NoProfile -Command "$ports = 4176,4177,4178,4179,4180; foreach ($p in $ports) { try { Get-NetTCPConnection -LocalPort $p -ErrorAction Stop | Out-Null; } catch { $p; break } }"') do set "PORT=%%p"
+if not defined PORT set "PORT=4176"
+
+echo Starting Revision App on port %PORT%...
+for /f "tokens=2 delims=:" %%a in ('ipconfig ^| findstr /R /C:"IPv4 Address" 2^>nul') do (
+    set "LAN_IP=%%a"
+    goto :continue
+)
+:continue
+if not defined LAN_IP set "LAN_IP=127.0.0.1"
+set "LAN_IP=%LAN_IP: =%"
+set "LAN_URL=http://%LAN_IP%:%PORT%"
+set "LOCAL_URL=http://localhost:%PORT%"
+
+echo Access on your phone: %LAN_URL%
+
+echo Access in browser: %LOCAL_URL%
+start "" %LOCAL_URL%
+call npm run dev -- --host 0.0.0.0 --port %PORT%

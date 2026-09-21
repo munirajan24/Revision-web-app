@@ -155,6 +155,36 @@ describe('simple learning flow', () => {
     expect(getSolutionFlow(problem, 'Stream API')).toContain('Create a stream');
   });
 
+  it('uses a consistent step-by-step flow across all solution variants', () => {
+    const problem = problems.find((item) => item.title === 'Find duplicate characters')!;
+    const flow = getSolutionFlow(problem, 'Basic Solution', getProblemSolutions(problem, 'kotlin')[0].code);
+
+    expect(flow[0]).toMatch(/Input/i);
+    expect(flow.some((step) => /filter|remove duplicates|distinct|unique/i.test(step))).toBe(true);
+    expect(flow.at(-1)).toMatch(/Print Result|Return the answer/i);
+  });
+
+  it('describes the operations used by the selected solution code', () => {
+    const wordCount = problems.find((problem) => problem.title === 'Count words in a sentence')!;
+    const wordCountCode = getProblemSolutions(wordCount, 'kotlin')[1].code;
+    const wordCountFlow = getSolutionFlow(wordCount, 'Alternative', wordCountCode);
+
+    expect(wordCountFlow).toContain('Split the input with `split(...)`');
+    expect(wordCountFlow).toContain('Filter values with `filter(...)`');
+
+    const sorted = problems.find((problem) => problem.title === 'Sort numbers ascending')!;
+    const sortedCode = getProblemSolutions(sorted, 'kotlin')[0].code;
+    expect(getSolutionFlow(sorted, 'Basic Solution', sortedCode).some((step) => /sort/i.test(step))).toBe(true);
+
+    const listConversion = problems.find((problem) => problem.title === 'Find unique characters')!;
+    const listConversionCode = getProblemSolutions(listConversion, 'kotlin')[3].code;
+    expect(getSolutionFlow(listConversion, 'Stream API', listConversionCode).some((step) => /list/i.test(step))).toBe(true);
+
+    const grouped = problems.find((problem) => problem.title === 'Group anagrams')!;
+    const groupedCode = getProblemSolutions(grouped, 'kotlin')[0].code;
+    expect(getSolutionFlow(grouped, 'Basic Solution', groupedCode).some((step) => /group|map|count/i.test(step))).toBe(true);
+  });
+
   it('replaces placeholder examples with question-specific examples', () => {
     const problem = problems.find((item) => item.title === 'Find duplicate characters');
     const example = getProblemExamples(problem ?? problems[0])[0];

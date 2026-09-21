@@ -4,10 +4,15 @@ export default defineConfig({
     plugins: [react()],
     server: {
         host: '0.0.0.0',
-        port: 4173,
+        port: 4176,
+        strictPort: false,
+        hmr: {
+            host: '0.0.0.0',
+        },
     },
     preview: {
         host: '0.0.0.0',
-        port: 4174,
+        port: 4176,
+        strictPort: false,
     },
 });

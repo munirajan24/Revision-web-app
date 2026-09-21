@@ -707,7 +707,7 @@ export default function App() {
                           <div className="solution-flow-block">
                             <span className="muted-label">How this solution works</span>
                             <div className="simple-flow" aria-label={`${variant.label} solution procedure`}>
-                              {getSolutionFlow(selectedProblem, variant.label).map((node, flowIndex) => (
+                              {getSolutionFlow(selectedProblem, variant.label, variant.code).map((node, flowIndex) => (
                                 <div key={`${node}-${flowIndex}`} className="simple-flow-step">
                                   <span>{flowIndex + 1}</span>
                                   <strong>{node}</strong>

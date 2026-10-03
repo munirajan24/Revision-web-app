@@ -1,0 +1,35 @@
+name: Enforce pull request target
+
+on:
+  pull_request_target:
+    types: [opened, reopened, edited]
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  require-development-base:
+    if: github.event.pull_request.base.ref != 'development' && github.event.pull_request.user.login != github.repository_owner
+    runs-on: ubuntu-latest
+    steps:
+      - name: Explain policy and close pull request
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const pullNumber = context.issue.number;
+
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: pullNumber,
+              body: 'Thanks for the contribution. Please open pull requests against the `development` branch. Pull requests targeting other branches are closed automatically.'
+            });
+
+            await github.rest.pulls.update({
+              owner,
+              repo,
+              pull_number: pullNumber,
+              state: 'closed'
+            });

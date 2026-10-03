@@ -20,6 +20,7 @@ const viewByTab: Record<string, View> = {
   reference: 'reference',
   analytics: 'analytics',
   interviews: 'interviews',
+  'revision-checklist': 'interviews',
   settings: 'settings',
 };
 
@@ -30,7 +31,7 @@ const tabByView: Record<View, string> = {
   keywords: 'keywords',
   reference: 'syntax',
   analytics: 'analytics',
-  interviews: 'interviews',
+  interviews: 'revision-checklist',
   settings: 'settings',
 };
 
@@ -552,11 +553,11 @@ export default function App() {
           {[
             ['dashboard', 'Dashboard'],
             ['questions', 'Questions'],
+            ['interviews', 'Revision checklist'],
             ['practice', 'Practice'],
             ['keywords', 'Keywords'],
             ['reference', 'Syntax'],
             ['analytics', 'Analytics'],
-            ['interviews', 'Interviews'],
             ['settings', 'Settings'],
           ].map(([name, label]) => (
             <button
@@ -587,7 +588,7 @@ export default function App() {
               {view === 'keywords' && 'Keyword trainer'}
               {view === 'reference' && 'Syntax'}
               {view === 'analytics' && 'Analytics'}
-              {view === 'interviews' && 'Interview planner'}
+              {view === 'interviews' && 'Revision checklist'}
               {view === 'settings' && 'Settings'}
             </h1>
           </div>
@@ -1238,10 +1239,10 @@ export default function App() {
                   const url = URL.createObjectURL(blob);
                   const anchor = document.createElement('a');
                   anchor.href = url;
-                  anchor.download = 'interview-checklists-and-schedule.json';
+                  anchor.download = 'revision-checklists-and-sessions.json';
                   anchor.click();
                   URL.revokeObjectURL(url);
-                }}>Export Interviews</button>
+                }}>Export revision data</button>
                 <button className="secondary-button" type="button" onClick={() => {
                   const input = document.createElement('input');
                   input.type = 'file';
@@ -1256,16 +1257,16 @@ export default function App() {
                         if (parsed?.version === 1 && Array.isArray(parsed.catalog) && Array.isArray(parsed.interviews)) {
                           setInterviewStore({ version: 1, catalog: parsed.catalog, interviews: parsed.interviews });
                         } else {
-                          window.alert('Invalid interview data file.');
+                          window.alert('Invalid revision data file.');
                         }
                       } catch {
-                        window.alert('Invalid interview data file.');
+                        window.alert('Invalid revision data file.');
                       }
                     };
                     reader.readAsText(file);
                   };
                   input.click();
-                }}>Import Interviews</button>
+                }}>Import revision data</button>
                 <button className="danger-button" type="button" onClick={() => {
                   if (window.confirm('Reset all progress?')) {
                     setProgress(buildDefaultProgressMap());

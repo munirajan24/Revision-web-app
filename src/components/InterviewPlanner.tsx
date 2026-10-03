@@ -18,9 +18,9 @@ interface InterviewPlannerProps {
 
 const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const attendanceLabels: Record<InterviewAttendance, string> = {
-  scheduled: 'Scheduled',
-  attended: 'Attended',
-  not_attended: 'Not attended',
+  scheduled: 'Planned',
+  attended: 'Completed',
+  not_attended: 'Missed',
 };
 
 export default function InterviewPlanner({ store, onChange }: InterviewPlannerProps) {
@@ -83,7 +83,7 @@ export default function InterviewPlanner({ store, onChange }: InterviewPlannerPr
   };
 
   const removeInterview = (interviewId: string) => {
-    if (!window.confirm('Delete this interview and its checklist progress?')) return;
+    if (!window.confirm('Delete this session and its checklist progress?')) return;
     onChange({ ...store, interviews: store.interviews.filter((interview) => interview.id !== interviewId) });
     if (selectedInterviewId === interviewId) setSelectedInterviewId(null);
   };
@@ -108,11 +108,11 @@ export default function InterviewPlanner({ store, onChange }: InterviewPlannerPr
 
   return (
     <div className="interview-planner">
-      <nav className="planner-screen-nav" aria-label="Interview planner screens" role="tablist">
+      <nav className="planner-screen-nav" aria-label="Revision checklist views" role="tablist">
         {([
-          ['calendar', 'Calendar'],
+          ['calendar', 'Schedule'],
           ['checklist', 'Checklist'],
-          ['catalog', 'Source catalog'],
+          ['catalog', 'Checklist library'],
         ] as const).map(([id, label]) => (
           <button key={id} type="button" role="tab" aria-selected={screen === id} className={screen === id ? 'planner-screen-tab active' : 'planner-screen-tab'} onClick={() => setScreen(id)}>
             {label}
@@ -124,7 +124,7 @@ export default function InterviewPlanner({ store, onChange }: InterviewPlannerPr
       <section className="interview-calendar-panel">
         <div className="planner-panel-heading">
           <div>
-            <p className="eyebrow">Interview schedule</p>
+            <p className="eyebrow">Revision schedule</p>
             <h2>{monthLabel}</h2>
           </div>
           <div className="calendar-controls" aria-label="Calendar navigation">
@@ -144,7 +144,7 @@ export default function InterviewPlanner({ store, onChange }: InterviewPlannerPr
                 key={dateKey}
                 type="button"
                 role="gridcell"
-                aria-label={`${day.toLocaleDateString(undefined, { dateStyle: 'full' })}${count ? `, ${count} interviews` : ''}`}
+                aria-label={`${day.toLocaleDateString(undefined, { dateStyle: 'full' })}${count ? `, ${count} sessions` : ''}`}
                 aria-pressed={selectedDate === dateKey}
                 className={`calendar-day${outsideMonth ? ' outside-month' : ''}${selectedDate === dateKey ? ' selected' : ''}${count ? ' has-interview' : ''}`}
                 onClick={() => setSelectedDate(dateKey)}
@@ -155,7 +155,7 @@ export default function InterviewPlanner({ store, onChange }: InterviewPlannerPr
             );
           })}
         </div>
-        <div className="calendar-legend"><span className="calendar-dot" /> Scheduled interviews</div>
+        <div className="calendar-legend"><span className="calendar-dot" /> Planned sessions</div>
       </section>
 
       <section className="interview-day-panel">
@@ -165,18 +165,18 @@ export default function InterviewPlanner({ store, onChange }: InterviewPlannerPr
             <h2>{formatDate(selectedDate)}</h2>
           </div>
           <button className="primary-button" type="button" onClick={() => setShowCreateForm((shown) => !shown)}>
-            {showCreateForm ? 'Close form' : '+ Add interview'}
+            {showCreateForm ? 'Close form' : '+ Add session'}
           </button>
         </div>
 
         {showCreateForm && (
           <form className="interview-create-form" onSubmit={addInterview}>
             <div className="interview-form-fields">
-              <label>Interview name<input value={newTitle} onChange={(event) => setNewTitle(event.target.value)} placeholder="Technical interview" /></label>
-              <label>Company<input value={newCompany} onChange={(event) => setNewCompany(event.target.value)} placeholder="Company name" /></label>
+              <label>Session name<input value={newTitle} onChange={(event) => setNewTitle(event.target.value)} placeholder="e.g. Kotlin revision" /></label>
+              <label>Organization<input value={newCompany} onChange={(event) => setNewCompany(event.target.value)} placeholder="Organization name" /></label>
             </div>
             <fieldset className="checklist-picker">
-              <legend>Skills for this interview</legend>
+              <legend>Skills to revise</legend>
               <div className="checklist-picker-grid">
                 {store.catalog.map((checklist) => (
                   <label key={checklist.id} className="checklist-option">
@@ -186,12 +186,12 @@ export default function InterviewPlanner({ store, onChange }: InterviewPlannerPr
                 ))}
               </div>
             </fieldset>
-            <button className="primary-button" type="submit" disabled={selectedChecklistIds.length === 0}>Create interview</button>
+            <button className="primary-button" type="submit" disabled={selectedChecklistIds.length === 0}>Create session</button>
           </form>
         )}
 
         {dayInterviews.length === 0 && !showCreateForm && (
-          <div className="interview-empty-state"><p>No interviews scheduled for this date.</p></div>
+          <div className="interview-empty-state"><p>No revision sessions planned for this date.</p></div>
         )}
 
         <div className="interview-list">
@@ -211,7 +211,7 @@ export default function InterviewPlanner({ store, onChange }: InterviewPlannerPr
 
       {screen === 'checklist' && <section className="planner-screen checklist-screen">
         <div className="planner-screen-heading">
-          <div><p className="eyebrow">Interview preparation</p><h2>Checklist</h2></div>
+          <div><p className="eyebrow">Session preparation</p><h2>Checklist</h2></div>
           <button className="secondary-button" type="button" onClick={() => setScreen('calendar')}>Back to calendar</button>
         </div>
         {selectedInterview ? (
@@ -223,14 +223,14 @@ export default function InterviewPlanner({ store, onChange }: InterviewPlannerPr
             onOpenChecklist={() => undefined}
           />
         ) : (
-          <div className="interview-empty-state"><p>Select an interview from the calendar to open its checklist.</p></div>
+          <div className="interview-empty-state"><p>Select a session from the schedule to open its checklist.</p></div>
         )}
       </section>}
 
       {screen === 'catalog' && <section className="planner-screen catalog-manager-panel">
         <div className="planner-panel-heading">
           <div>
-            <p className="eyebrow">Source catalog</p>
+            <p className="eyebrow">Checklist library</p>
             <h2>Skill checklists <span className="catalog-count">{store.catalog.length}</span></h2>
           </div>
         </div>
@@ -249,10 +249,10 @@ export default function InterviewPlanner({ store, onChange }: InterviewPlannerPr
       {pendingChecklistRemoval && (
         <div className="confirmation-overlay">
           <section className="confirmation-dialog" role="dialog" aria-modal="true" aria-labelledby="remove-checklist-title">
-            <p className="eyebrow">Remove from source catalog</p>
+            <p className="eyebrow">Remove from checklist library</p>
             <h2 id="remove-checklist-title">Remove {pendingChecklistRemoval.title}?</h2>
             <p className="confirmation-copy">
-              This removes the skill and its {countItems(pendingChecklistRemoval)} catalog items. Existing interviews keep their saved checklist and progress.
+              This removes the skill and its {countItems(pendingChecklistRemoval)} catalog items. Existing sessions keep their saved checklist and progress.
             </p>
             <label className="confirmation-input-label" htmlFor="confirm-skill-removal">
               Type <strong>{pendingChecklistRemoval.title}</strong> to confirm
@@ -311,16 +311,16 @@ function InterviewCard({
     <article className="interview-record">
       <div className="interview-record-heading">
         <div className="interview-record-title-fields">
-          <input aria-label="Interview name" value={interview.title} onChange={(event) => onChange({ ...interview, title: event.target.value })} placeholder="Interview name" />
-          <input aria-label="Company" value={interview.company} onChange={(event) => onChange({ ...interview, company: event.target.value })} placeholder="Company" />
+          <input aria-label="Session name" value={interview.title} onChange={(event) => onChange({ ...interview, title: event.target.value })} placeholder="Session name" />
+          <input aria-label="Organization" value={interview.company} onChange={(event) => onChange({ ...interview, company: event.target.value })} placeholder="Organization" />
         </div>
-        <button className="icon-button danger-icon" type="button" title="Delete interview" aria-label="Delete interview" onClick={onDelete}>×</button>
+        <button className="icon-button danger-icon" type="button" title="Delete session" aria-label="Delete session" onClick={onDelete}>×</button>
       </div>
       <div className="interview-record-meta">
         <label className="attendance-control">Date
           <input type="date" value={interview.date} onChange={(event) => onChange({ ...interview, date: event.target.value })} />
         </label>
-        <label className="attendance-control">Attendance
+        <label className="attendance-control">Status
           <select value={interview.attendance} onChange={(event) => onChange({ ...interview, attendance: event.target.value as InterviewAttendance })}>
             {Object.entries(attendanceLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
@@ -332,7 +332,7 @@ function InterviewCard({
       </div>
       {showChecklist ? (
         <>
-          <label className="interview-notes-label">Notes<textarea value={interview.notes} onChange={(event) => onChange({ ...interview, notes: event.target.value })} placeholder="Interview notes" rows={2} /></label>
+          <label className="interview-notes-label">Notes<textarea value={interview.notes} onChange={(event) => onChange({ ...interview, notes: event.target.value })} placeholder="Revision notes" rows={2} /></label>
           <div className="interview-checklists">
             <label className="skill-checklist-selector">
               <span>Skill checklist</span>
@@ -393,7 +393,7 @@ function InterviewCard({
                 </div>
               </section>
             ) : (
-              <div className="interview-empty-state"><p>This interview has no skill checklists.</p></div>
+              <div className="interview-empty-state"><p>This session has no revision checklists.</p></div>
             )}
           </div>
         </>

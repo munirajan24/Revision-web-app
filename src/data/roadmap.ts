@@ -485,10 +485,10 @@ const buildKotlinVariantSet = (problem: Problem): SolutionVariant[] => {
     return buildVariants(
       `fun ${methodName}(input: String): String = input.reversed()`,
       `fun ${methodName}(input: String): String {
-    val chars = input.toCharArray()
+    val charArray = input.toCharArray()
     val result = StringBuilder()
-    for (index in chars.indices.reversed()) {
-        result.append(chars[index])
+    for (i in charArray.size - 1 downTo 0) {
+        result.append(charArray[i])
     }
     return result.toString()
 }`,
@@ -500,11 +500,13 @@ const buildKotlinVariantSet = (problem: Problem): SolutionVariant[] => {
     }
     return String(reversed)
 }`,
-      `fun ${methodName}(input: String): String = input.asSequence().reversed().joinToString("")`
+      `fun ${methodName}(input: String): String {
+      return input.asSequence().toList().reversed().joinToString("")
+    }`
     );
   }
 
-  if (title.includes('palindrome')) {
+  if (title.includes('palindrome')) { 
     return buildVariants(
       `fun ${methodName}(input: String): Boolean = input == input.reversed()`,
       `fun ${methodName}(input: String): Boolean {

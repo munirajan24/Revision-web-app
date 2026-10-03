@@ -1,11 +1,43 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { getProblemById, getProblemExamples, getProblemHintsForLanguage, getProblemSolution, getProblemSolutions, getSolutionComplexity, getSolutionFlow, keywordCatalog, levelMeta, loadProblemSolutions, problems, type SolutionLanguage, type SolutionVariant } from './data/roadmap';
+import { getSyntaxReturnType, syntaxReference } from './data/syntax-reference';
 import { calculateMastery, getNextReviewDate } from './engine/mastery';
+import InterviewPlanner from './components/InterviewPlanner';
+import { seedSkillChecklists } from './data/skill-checklists';
+import { loadInterviewStore, saveInterviewStore, type InterviewStore } from './engine/interviews';
 
-type View = 'dashboard' | 'questions' | 'practice' | 'keywords' | 'analytics' | 'settings';
+type View = 'dashboard' | 'questions' | 'practice' | 'keywords' | 'reference' | 'analytics' | 'interviews' | 'settings';
 type AppLanguage = 'kotlin' | 'java';
 type TrainingMode = 'learning' | 'practice';
 type ProgressStatus = 'not_started' | 'learning' | 'practicing' | 'strong' | 'mastered';
+
+const viewByTab: Record<string, View> = {
+  dashboard: 'dashboard',
+  questions: 'questions',
+  practice: 'practice',
+  keywords: 'keywords',
+  syntax: 'reference',
+  reference: 'reference',
+  analytics: 'analytics',
+  interviews: 'interviews',
+  settings: 'settings',
+};
+
+const tabByView: Record<View, string> = {
+  dashboard: 'dashboard',
+  questions: 'questions',
+  practice: 'practice',
+  keywords: 'keywords',
+  reference: 'syntax',
+  analytics: 'analytics',
+  interviews: 'interviews',
+  settings: 'settings',
+};
+
+function getViewFromUrl(): View {
+  const tab = new URLSearchParams(window.location.search).get('tab');
+  return tab ? viewByTab[tab.toLowerCase()] ?? 'dashboard' : 'dashboard';
+}
 
 const languageText = {
   kotlin: {
@@ -178,13 +210,16 @@ function loadState(): {
 
 export default function App() {
   const initial = useMemo(() => loadState(), []);
-  const [view, setView] = useState<View>('dashboard');
+  const initialInterviewStore = useMemo(() => loadInterviewStore(localStorage, seedSkillChecklists), []);
+  const [view, setView] = useState<View>(getViewFromUrl);
+  const [activeReferenceSection, setActiveReferenceSection] = useState(syntaxReference[0]?.id ?? '');
   const [theme, setTheme] = useState(initial.theme);
   const [language, setLanguage] = useState<AppLanguage>(initial.language);
   const [progress, setProgress] = useState<Record<number, ProgressEntry>>(initial.progress);
   const [drafts, setDrafts] = useState<Record<number, string>>(initial.drafts);
   const [selectedProblemId, setSelectedProblemId] = useState(initial.selectedProblemId);
   const [mode, setMode] = useState<TrainingMode>(initial.mode);
+  const [interviewStore, setInterviewStore] = useState<InterviewStore>(initialInterviewStore);
   const [search, setSearch] = useState('');
   const [levelFilter, setLevelFilter] = useState('all');
   const [difficultyFilter, setDifficultyFilter] = useState('all');
@@ -203,15 +238,54 @@ export default function App() {
   const [lazySolutionMap, setLazySolutionMap] = useState<Record<number, Partial<Record<SolutionLanguage, SolutionVariant[]>>>>({});
   const [solutionLoadState, setSolutionLoadState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const editorRef = useRef<HTMLTextAreaElement | null>(null);
+  const editorHighlightRef = useRef<HTMLPreElement | null>(null);
+  const editorGutterRef = useRef<HTMLDivElement | null>(null);
 
   const selectedProblem = getProblemById(selectedProblemId) ?? problems[0];
+  const editorCode = drafts[selectedProblem.id] ?? '';
   const activeLanguageText = languageText[language];
+
+  const navigateToView = (nextView: View) => {
+    setView(nextView);
+    const url = new URL(window.location.href);
+    const tab = tabByView[nextView];
+    if (url.searchParams.get('tab') !== tab) {
+      url.searchParams.set('tab', tab);
+      window.history.pushState({}, '', url);
+    }
+  };
+
+  useEffect(() => {
+    const handlePopState = () => setView(getViewFromUrl());
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  useEffect(() => {
+    if (view !== 'reference') return;
+
+    const sections = document.querySelectorAll<HTMLElement>('.reference-section');
+    const observer = new IntersectionObserver((entries) => {
+      const visibleSections = entries
+        .filter((entry) => entry.isIntersecting)
+        .sort((first, second) => first.boundingClientRect.top - second.boundingClientRect.top);
+      const sectionId = visibleSections[0]?.target.id.replace('reference-', '');
+      if (sectionId) setActiveReferenceSection(sectionId);
+    }, { rootMargin: '-120px 0px -65% 0px', threshold: 0 });
+
+    sections.forEach((section) => observer.observe(section));
+    return () => observer.disconnect();
+  }, [view]);
 
   useEffect(() => {
     document.body.dataset.theme = theme;
     document.body.dataset.language = language;
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ progress, drafts, theme, language, selectedProblemId, mode }));
   }, [progress, drafts, theme, language, selectedProblemId, mode]);
+
+  useEffect(() => {
+    saveInterviewStore(localStorage, interviewStore);
+  }, [interviewStore]);
 
   useEffect(() => {
     const record = progress[selectedProblemId] ?? { ...DEFAULT_PROGRESS };
@@ -388,7 +462,7 @@ export default function App() {
 
   const openQuestion = (id: number) => {
     setSelectedProblemId(id);
-    setView('practice');
+    navigateToView('practice');
   };
 
   const getQuestionSurfOrder = () => {
@@ -480,14 +554,16 @@ export default function App() {
             ['questions', 'Questions'],
             ['practice', 'Practice'],
             ['keywords', 'Keywords'],
+            ['reference', 'Syntax'],
             ['analytics', 'Analytics'],
+            ['interviews', 'Interviews'],
             ['settings', 'Settings'],
           ].map(([name, label]) => (
             <button
               key={name}
               type="button"
               className={view === name ? 'nav-item active' : 'nav-item'}
-              onClick={() => setView(name as View)}
+              onClick={() => navigateToView(name as View)}
             >
               {label}
             </button>
@@ -502,27 +578,31 @@ export default function App() {
       </aside>
 
       <main className="main-panel">
-        <header className="topbar">
+        <header className={view === 'reference' ? 'topbar topbar-reference' : 'topbar'}>
           <div>
             <h1>
               {view === 'dashboard' && 'Dashboard'}
               {view === 'questions' && 'Question library'}
               {view === 'practice' && `${mode === 'learning' ? 'Learning' : 'Practice'} mode`}
               {view === 'keywords' && 'Keyword trainer'}
+              {view === 'reference' && 'Syntax'}
               {view === 'analytics' && 'Analytics'}
+              {view === 'interviews' && 'Interview planner'}
               {view === 'settings' && 'Settings'}
             </h1>
           </div>
-          {view === 'practice' && (
+          {(view === 'practice' || view === 'reference') && (
             <div className="topbar-controls">
-              <div className="mode-switch top-mode-switch" role="tablist" aria-label="Training mode">
-                <button type="button" className={mode === 'learning' ? 'mode-button active' : 'mode-button'} onClick={() => setMode('learning')} role="tab" aria-selected={mode === 'learning'}>
-                  Learn
-                </button>
-                <button type="button" className={mode === 'practice' ? 'mode-button active' : 'mode-button'} onClick={() => setMode('practice')} role="tab" aria-selected={mode === 'practice'}>
-                  Practice
-                </button>
-              </div>
+              {view === 'practice' && (
+                <div className="mode-switch top-mode-switch" role="tablist" aria-label="Training mode">
+                  <button type="button" className={mode === 'learning' ? 'mode-button active' : 'mode-button'} onClick={() => setMode('learning')} role="tab" aria-selected={mode === 'learning'}>
+                    Learn
+                  </button>
+                  <button type="button" className={mode === 'practice' ? 'mode-button active' : 'mode-button'} onClick={() => setMode('practice')} role="tab" aria-selected={mode === 'practice'}>
+                    Practice
+                  </button>
+                </div>
+              )}
               <div className="language-switch" role="group" aria-label="Programming language">
                 {(['kotlin', 'java'] as AppLanguage[]).map((option) => (
                   <button key={option} type="button" className={language === option ? 'language-button active' : 'language-button'} onClick={() => setLanguage(option)}>
@@ -571,8 +651,8 @@ export default function App() {
               <h3>What should I learn?</h3>
               <p>Based on your activity, prioritize HashMap patterns, sliding-window questions, and {activeLanguageText.primaryLanguage.toLowerCase()} collection usage.</p>
               <div className="action-row">
-                <button className="primary-button" type="button" onClick={() => setView('questions')}>Start 10-Minute Practice</button>
-                <button className="secondary-button" type="button" onClick={() => { setMode('learning'); setView('questions'); }}>Start Guided Learning</button>
+                <button className="primary-button" type="button" onClick={() => navigateToView('questions')}>Start 10-Minute Practice</button>
+                <button className="secondary-button" type="button" onClick={() => { setMode('learning'); navigateToView('questions'); }}>Start Guided Learning</button>
               </div>
             </section>
           </div>
@@ -753,27 +833,49 @@ export default function App() {
               <div className="editor-area">
                 <div className="editor-label-row">
                   <label htmlFor="answer-editor">Your answer</label>
-                  <span className="editor-language-badge">{languageText[solutionViewLanguage].primaryLanguage}</span>
+                  <div className="editor-label-actions">
+                    <span className="editor-language-badge">{languageText[solutionViewLanguage].primaryLanguage}</span>
+                    <button
+                      className="secondary-button copy-code-button"
+                      type="button"
+                      disabled={!editorCode.trim()}
+                      onClick={() => copyCode(editorCode, `draft-${selectedProblem.id}`)}
+                    >
+                      {copiedCodeKey === `draft-${selectedProblem.id}` ? 'Copied' : 'Copy code'}
+                    </button>
+                  </div>
                 </div>
                 <div className={`editor-shell editor-shell-${solutionViewLanguage}`}>
                   <div className="editor-gutter">
-                    {Array.from({ length: 12 }).map((_, index) => (
-                      <span key={index + 1}>{index + 1}</span>
-                    ))}
+                    <div className="editor-gutter-lines" ref={editorGutterRef}>
+                      {Array.from({ length: editorCode.split('\n').length }).map((_, index) => (
+                        <span key={index + 1}>{index + 1}</span>
+                      ))}
+                    </div>
                   </div>
                   <div className="editor-stack">
-                    <pre className="editor-highlight" aria-hidden="true">
-                      {renderHighlightedCode(drafts[selectedProblem.id] ?? '', solutionViewLanguage)}
+                    <pre className="editor-highlight" ref={editorHighlightRef} aria-hidden="true">
+                      {renderHighlightedCode(editorCode, solutionViewLanguage)}
                     </pre>
                     <textarea
                       id="answer-editor"
                       ref={editorRef}
                       className={`code-editor code-editor-${solutionViewLanguage}`}
-                      value={drafts[selectedProblem.id] ?? ''}
+                      value={editorCode}
                       onChange={(event) => {
                         const nextValue = event.target.value;
                         setDrafts((current) => ({ ...current, [selectedProblem.id]: nextValue }));
                         setAutocompleteSuggestions(getAutocompleteSuggestions(nextValue, solutionViewLanguage, event.target.selectionStart ?? nextValue.length));
+                      }}
+                      onScroll={(event) => {
+                        const { scrollTop, scrollLeft } = event.currentTarget;
+                        if (editorHighlightRef.current) {
+                          editorHighlightRef.current.scrollTop = scrollTop;
+                          editorHighlightRef.current.scrollLeft = scrollLeft;
+                        }
+                        if (editorGutterRef.current) {
+                          editorGutterRef.current.style.transform = `translateY(-${scrollTop}px)`;
+                        }
                       }}
                       onKeyDown={(event) => {
                         if (event.key === 'Tab' && autocompleteSuggestions[0]) {
@@ -960,7 +1062,7 @@ export default function App() {
                       onClick={() => {
                         const related = problems.filter((problem) => problem.keywords.includes(item));
                         setSearch(item);
-                        setView('questions');
+                        navigateToView('questions');
                         if (related[0]) openQuestion(related[0].id);
                       }}
                     >
@@ -970,6 +1072,74 @@ export default function App() {
                 </div>
               </section>
             ))}
+          </div>
+        )}
+
+        {view === 'reference' && (
+          <div className="reference-layout">
+            <div className="reference-page">
+              {syntaxReference.map((section) => (
+                <section key={section.id} id={`reference-${section.id}`} className="reference-section" aria-labelledby={`reference-heading-${section.id}`}>
+                  <h2 id={`reference-heading-${section.id}`}>{section.title}</h2>
+                  <div className="reference-grid">
+                    {section.concepts.map((concept) => (
+                      <section key={concept.id} className="reference-concept" aria-labelledby={`concept-${concept.id}`}>
+                        <h3 id={`concept-${concept.id}`}>{concept.title}</h3>
+                        <div className="reference-table-scroll" role="region" aria-label={`${concept.title} syntax table`} tabIndex={0}>
+                          <table className="reference-table">
+                            <thead>
+                              <tr>
+                                <th scope="col">Use case</th>
+                                <th scope="col">Syntax</th>
+                                <th scope="col">Return type</th>
+                                <th scope="col">Example</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {concept.rows[language].map((row, rowIndex) => (
+                                <tr key={`${row.useCase}-${row.syntax}`}>
+                                  <th scope="row">{row.useCase}</th>
+                                  <td><code>{row.syntax}</code></td>
+                                  <td><code>{getSyntaxReturnType(concept.id, rowIndex, language)}</code></td>
+                                  <td><code>{row.example}</code></td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                        {concept.note?.[language] && <p className="reference-note">{concept.note[language]}</p>}
+                      </section>
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
+            <nav className="reference-segment-nav" aria-label="Syntax sections">
+              {syntaxReference.map((section) => (
+                <a
+                  key={section.id}
+                  href={`#reference-${section.id}`}
+                  className={activeReferenceSection === section.id ? 'active' : undefined}
+                  aria-current={activeReferenceSection === section.id ? 'location' : undefined}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    setActiveReferenceSection(section.id);
+                    document.getElementById(`reference-${section.id}`)?.scrollIntoView({
+                      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+                      block: 'start',
+                    });
+                    const url = new URL(window.location.href);
+                    const hash = `#reference-${section.id}`;
+                    if (url.hash !== hash) {
+                      url.hash = hash;
+                      window.history.pushState({}, '', url);
+                    }
+                  }}
+                >
+                  {section.title}
+                </a>
+              ))}
+            </nav>
           </div>
         )}
 
@@ -1062,6 +1232,40 @@ export default function App() {
                   };
                   input.click();
                 }}>Import Progress</button>
+                <button className="secondary-button" type="button" onClick={() => {
+                  const exportData = JSON.stringify({ ...interviewStore, exportedAt: new Date().toISOString() }, null, 2);
+                  const blob = new Blob([exportData], { type: 'application/json' });
+                  const url = URL.createObjectURL(blob);
+                  const anchor = document.createElement('a');
+                  anchor.href = url;
+                  anchor.download = 'interview-checklists-and-schedule.json';
+                  anchor.click();
+                  URL.revokeObjectURL(url);
+                }}>Export Interviews</button>
+                <button className="secondary-button" type="button" onClick={() => {
+                  const input = document.createElement('input');
+                  input.type = 'file';
+                  input.accept = 'application/json';
+                  input.onchange = (event) => {
+                    const file = (event.target as HTMLInputElement).files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                      try {
+                        const parsed = JSON.parse(String(reader.result));
+                        if (parsed?.version === 1 && Array.isArray(parsed.catalog) && Array.isArray(parsed.interviews)) {
+                          setInterviewStore({ version: 1, catalog: parsed.catalog, interviews: parsed.interviews });
+                        } else {
+                          window.alert('Invalid interview data file.');
+                        }
+                      } catch {
+                        window.alert('Invalid interview data file.');
+                      }
+                    };
+                    reader.readAsText(file);
+                  };
+                  input.click();
+                }}>Import Interviews</button>
                 <button className="danger-button" type="button" onClick={() => {
                   if (window.confirm('Reset all progress?')) {
                     setProgress(buildDefaultProgressMap());
@@ -1070,6 +1274,10 @@ export default function App() {
               </div>
             </section>
           </div>
+        )}
+
+        {view === 'interviews' && (
+          <InterviewPlanner store={interviewStore} onChange={setInterviewStore} />
         )}
       </main>
     </div>

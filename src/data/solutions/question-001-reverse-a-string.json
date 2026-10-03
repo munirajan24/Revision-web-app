@@ -8,13 +8,13 @@
     },
     {
       "label": "Alternative",
-      "code": "fun reverseAString(input: String): String {\n    val chars = input.toCharArray()\n    val result = StringBuilder()\n    for (index in chars.indices.reversed()) {\n        result.append(chars[index])\n    }\n    return result.toString()\n\n}",
+      "code": "fun reverseAString(input: String): String {\n    val charArray = input.toCharArray()\n    val result = StringBuilder()\n    for (i in charArray.size - 1 downTo 0) {\n        result.append(charArray[i])\n    }\n    return result.toString()\n\n}",
       "recommendation": "Good to try",
       "note": "Good to try: this is a valid backup and easy to explain, but the simplest direct solution usually reads better in an interview."
     },
     {
       "label": "Loop",
-      "code": "fun reverseAString(input: String): String {\n    val chars = input.toCharArray()\n    val reversed = CharArray(chars.size)\n    for (i in chars.indices) {\n        reversed[chars.size - 1 - i] = chars[i]\n    }\n    return String(reversed)\n\n}",
+      "code": "fun reverseAString(input: String): String {\n    val charArray = input.toCharArray()\n    val reversed = CharArray(charArray.size)\n    for (i in charArray.indices) {\n        reversed[charArray.size - 1 - i] = charArray[i]\n    }\n    return String(reversed)\n\n}",
       "recommendation": "Good to try",
       "note": "Good to try: the explicit loop is easy to reason about, which makes it a strong backup when the interviewer wants to see every step."
     },

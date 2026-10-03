@@ -19,8 +19,7 @@ if not exist node_modules (
     )
 )
 
-for /f %%p in ('powershell -NoProfile -Command "$ports = 4176,4177,4178,4179,4180; foreach ($p in $ports) { try { Get-NetTCPConnection -LocalPort $p -ErrorAction Stop | Out-Null; } catch { $p; break } }"') do set "PORT=%%p"
-if not defined PORT set "PORT=4176"
+set "PORT=4176"
 
 echo Starting Revision App on port %PORT%...
 for /f "tokens=2 delims=:" %%a in ('ipconfig ^| findstr /R /C:"IPv4 Address" 2^>nul') do (

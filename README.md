@@ -73,6 +73,8 @@ http://192.168.29.69:4176/
 
 The app is configured for local network access so it can be opened on a phone connected to the same Wi‑Fi.
 
+To stop the development server, run `stop-app.cmd` from the project folder. It stops this project's server without closing unrelated processes.
+
 ## Build for production
 
 ```bash

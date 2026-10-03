@@ -191,7 +191,7 @@ export default function InterviewPlanner({ store, onChange }: InterviewPlannerPr
         )}
 
         {dayInterviews.length === 0 && !showCreateForm && (
-          <div className="interview-empty-state"><span className="empty-calendar-mark">{new Date(`${selectedDate}T12:00:00`).getDate()}</span><p>No interviews scheduled for this date.</p></div>
+          <div className="interview-empty-state"><p>No interviews scheduled for this date.</p></div>
         )}
 
         <div className="interview-list">

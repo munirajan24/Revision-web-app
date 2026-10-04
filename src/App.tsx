@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { getProblemById, getProblemExamples, getProblemHintsForLanguage, getProblemSolution, getProblemSolutions, getSolutionComplexity, getSolutionFlow, keywordCatalog, levelMeta, loadProblemSolutions, problems, type SolutionLanguage, type SolutionVariant } from './data/roadmap';
 import { getSyntaxReturnType, syntaxReference } from './data/syntax-reference';
 import { calculateMastery, getNextReviewDate } from './engine/mastery';
@@ -6,7 +6,10 @@ import InterviewPlanner from './components/InterviewPlanner';
 import { seedSkillChecklists } from './data/skill-checklists';
 import { loadInterviewStore, saveInterviewStore, type InterviewStore } from './engine/interviews';
 
-type View = 'dashboard' | 'questions' | 'practice' | 'keywords' | 'reference' | 'analytics' | 'interviews' | 'settings';
+const CompleteRevision = lazy(() => import('./components/CompleteRevision'));
+const SampleInterview = lazy(() => import('./components/SampleInterview'));
+
+type View = 'dashboard' | 'questions' | 'practice' | 'keywords' | 'reference' | 'analytics' | 'interviews' | 'complete-revision' | 'sample-interview' | 'settings';
 type AppLanguage = 'kotlin' | 'java';
 type TrainingMode = 'learning' | 'practice';
 type ProgressStatus = 'not_started' | 'learning' | 'practicing' | 'strong' | 'mastered';
@@ -21,6 +24,8 @@ const viewByTab: Record<string, View> = {
   analytics: 'analytics',
   interviews: 'interviews',
   'revision-checklist': 'interviews',
+  'complete-revision': 'complete-revision',
+  'sample-interview': 'sample-interview',
   settings: 'settings',
 };
 
@@ -32,6 +37,8 @@ const tabByView: Record<View, string> = {
   reference: 'syntax',
   analytics: 'analytics',
   interviews: 'revision-checklist',
+  'complete-revision': 'complete-revision',
+  'sample-interview': 'sample-interview',
   settings: 'settings',
 };
 
@@ -554,6 +561,8 @@ export default function App() {
             ['dashboard', 'Dashboard'],
             ['questions', 'Questions'],
             ['interviews', 'Revision checklist'],
+            ['complete-revision', 'Complete revision'],
+            ['sample-interview', 'Sample interview'],
             ['practice', 'Practice'],
             ['keywords', 'Keywords'],
             ['reference', 'Syntax'],
@@ -589,6 +598,8 @@ export default function App() {
               {view === 'reference' && 'Syntax'}
               {view === 'analytics' && 'Analytics'}
               {view === 'interviews' && 'Revision checklist'}
+              {view === 'complete-revision' && 'Complete revision'}
+              {view === 'sample-interview' && 'Sample interview'}
               {view === 'settings' && 'Settings'}
             </h1>
           </div>
@@ -1279,6 +1290,11 @@ export default function App() {
 
         {view === 'interviews' && (
           <InterviewPlanner store={interviewStore} onChange={setInterviewStore} />
+        )}
+        {(view === 'complete-revision' || view === 'sample-interview') && (
+          <Suspense fallback={<div className="feature-loading" role="status">Loading question bank…</div>}>
+            {view === 'complete-revision' ? <CompleteRevision /> : <SampleInterview />}
+          </Suspense>
         )}
       </main>
     </div>

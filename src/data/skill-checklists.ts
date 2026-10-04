@@ -7,6 +7,7 @@ const markdownSources = import.meta.glob('../../Files/Checklist/**/*.md', {
 }) as Record<string, string>;
 
 export const seedSkillChecklists: SkillChecklist[] = Object.entries(markdownSources)
+  .filter(([path]) => !/(^|\/)Question bank\//i.test(path))
   .sort(([firstPath], [secondPath]) => firstPath.localeCompare(secondPath))
   .map(([path, markdown]) => {
     const sourceTitle = markdown.match(/^#\s+(.+)$/m)?.[1] ?? getFileTitle(path);

@@ -10,10 +10,14 @@ import {
   type InterviewStore,
   type SkillChecklist,
 } from '../engine/interviews';
+import JobApplicationChecklist from './JobApplicationChecklist';
+import { isJobApplicationScheduled, type JobApplicationStore } from '../engine/job-applications';
 
 interface InterviewPlannerProps {
   store: InterviewStore;
   onChange: (store: InterviewStore) => void;
+  jobApplicationStore: JobApplicationStore;
+  onJobApplicationChange: (store: JobApplicationStore) => void;
 }
 
 const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -23,8 +27,8 @@ const attendanceLabels: Record<InterviewAttendance, string> = {
   not_attended: 'Missed',
 };
 
-export default function InterviewPlanner({ store, onChange }: InterviewPlannerProps) {
-  const [screen, setScreen] = useState<'calendar' | 'checklist' | 'catalog'>('calendar');
+export default function InterviewPlanner({ store, onChange, jobApplicationStore, onJobApplicationChange }: InterviewPlannerProps) {
+  const [screen, setScreen] = useState<'calendar' | 'checklist' | 'job-applications' | 'catalog'>('calendar');
   const [selectedDate, setSelectedDate] = useState(getLocalDate());
   const [visibleMonth, setVisibleMonth] = useState(() => getMonthStart(new Date()));
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -111,7 +115,8 @@ export default function InterviewPlanner({ store, onChange }: InterviewPlannerPr
       <nav className="planner-screen-nav" aria-label="Revision checklist views" role="tablist">
         {([
           ['calendar', 'Schedule'],
-          ['checklist', 'Checklist'],
+          ['checklist', 'Session checklist'],
+          ['job-applications', 'Job applications'],
           ['catalog', 'Checklist library'],
         ] as const).map(([id, label]) => (
           <button key={id} type="button" role="tab" aria-selected={screen === id} className={screen === id ? 'planner-screen-tab active' : 'planner-screen-tab'} onClick={() => setScreen(id)}>
@@ -138,24 +143,32 @@ export default function InterviewPlanner({ store, onChange }: InterviewPlannerPr
           {calendarDays.map((day) => {
             const dateKey = toDateKey(day);
             const count = store.interviews.filter((interview) => interview.date === dateKey).length;
+            const hasJobApplications = isJobApplicationScheduled(dateKey, jobApplicationStore);
             const outsideMonth = day.getMonth() !== visibleMonth.getMonth();
             return (
               <button
                 key={dateKey}
                 type="button"
                 role="gridcell"
-                aria-label={`${day.toLocaleDateString(undefined, { dateStyle: 'full' })}${count ? `, ${count} sessions` : ''}`}
+                aria-label={`${day.toLocaleDateString(undefined, { dateStyle: 'full' })}${count ? `, ${count} sessions` : ''}${hasJobApplications ? ', job applications due' : ''}`}
                 aria-pressed={selectedDate === dateKey}
-                className={`calendar-day${outsideMonth ? ' outside-month' : ''}${selectedDate === dateKey ? ' selected' : ''}${count ? ' has-interview' : ''}`}
+                className={`calendar-day${outsideMonth ? ' outside-month' : ''}${selectedDate === dateKey ? ' selected' : ''}${count ? ' has-interview' : ''}${hasJobApplications ? ' has-job-applications' : ''}`}
                 onClick={() => setSelectedDate(dateKey)}
               >
                 <span>{day.getDate()}</span>
                 {count > 0 && <small>{count}</small>}
+                {(count > 0 || hasJobApplications) && <span className="calendar-markers" aria-hidden="true">
+                  {count > 0 && <i className="calendar-marker calendar-marker-interview" />}
+                  {hasJobApplications && <i className="calendar-marker calendar-marker-job" />}
+                </span>}
               </button>
             );
           })}
         </div>
-        <div className="calendar-legend"><span className="calendar-dot" /> Planned sessions</div>
+        <div className="calendar-legend">
+          <span className="calendar-dot" /> Planned sessions
+          <span className="calendar-dot calendar-dot-job" /> Job applications
+        </div>
       </section>
 
       <section className="interview-day-panel">
@@ -226,6 +239,10 @@ export default function InterviewPlanner({ store, onChange }: InterviewPlannerPr
           <div className="interview-empty-state"><p>Select a session from the schedule to open its checklist.</p></div>
         )}
       </section>}
+
+      {screen === 'job-applications' && (
+        <JobApplicationChecklist date={selectedDate} store={jobApplicationStore} onChange={onJobApplicationChange} />
+      )}
 
       {screen === 'catalog' && <section className="planner-screen catalog-manager-panel">
         <div className="planner-panel-heading">

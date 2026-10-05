@@ -5,6 +5,7 @@ import { calculateMastery, getNextReviewDate } from './engine/mastery';
 import InterviewPlanner from './components/InterviewPlanner';
 import { seedSkillChecklists } from './data/skill-checklists';
 import { loadInterviewStore, saveInterviewStore, type InterviewStore } from './engine/interviews';
+import { getJobApplicationProgress, getLocalDateKey, isJobApplicationStore, loadJobApplicationStore, saveJobApplicationStore, type JobApplicationStore } from './engine/job-applications';
 
 const CompleteRevision = lazy(() => import('./components/CompleteRevision'));
 const SampleInterview = lazy(() => import('./components/SampleInterview'));
@@ -219,6 +220,7 @@ function loadState(): {
 export default function App() {
   const initial = useMemo(() => loadState(), []);
   const initialInterviewStore = useMemo(() => loadInterviewStore(localStorage, seedSkillChecklists), []);
+  const initialJobApplicationStore = useMemo(() => loadJobApplicationStore(localStorage), []);
   const [view, setView] = useState<View>(getViewFromUrl);
   const [activeReferenceSection, setActiveReferenceSection] = useState(syntaxReference[0]?.id ?? '');
   const [theme, setTheme] = useState(initial.theme);
@@ -228,6 +230,8 @@ export default function App() {
   const [selectedProblemId, setSelectedProblemId] = useState(initial.selectedProblemId);
   const [mode, setMode] = useState<TrainingMode>(initial.mode);
   const [interviewStore, setInterviewStore] = useState<InterviewStore>(initialInterviewStore);
+  const [jobApplicationStore, setJobApplicationStore] = useState<JobApplicationStore>(initialJobApplicationStore);
+  const [todayDate, setTodayDate] = useState(getLocalDateKey);
   const [search, setSearch] = useState('');
   const [levelFilter, setLevelFilter] = useState('all');
   const [difficultyFilter, setDifficultyFilter] = useState('all');
@@ -296,6 +300,20 @@ export default function App() {
   }, [interviewStore]);
 
   useEffect(() => {
+    saveJobApplicationStore(localStorage, jobApplicationStore);
+  }, [jobApplicationStore]);
+
+  useEffect(() => {
+    const refreshToday = () => setTodayDate(getLocalDateKey());
+    const interval = window.setInterval(refreshToday, 60_000);
+    window.addEventListener('focus', refreshToday);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refreshToday);
+    };
+  }, []);
+
+  useEffect(() => {
     const record = progress[selectedProblemId] ?? { ...DEFAULT_PROGRESS };
     setConfidence(record.confidence);
     setNotes(record.notes);
@@ -333,6 +351,7 @@ export default function App() {
       return sum + mastery.score;
     }, 0) / Math.max(1, Object.keys(progress).length)
   );
+  const todayJobApplicationProgress = getJobApplicationProgress(jobApplicationStore, todayDate);
 
   const dashboardFocus = [...problems]
     .map((problem) => ({ problem, record: progress[problem.id] ?? { ...DEFAULT_PROGRESS } }))
@@ -554,6 +573,22 @@ export default function App() {
             <p className="eyebrow">{activeLanguageText.appName}</p>
             <h2>Practice cockpit</h2>
           </div>
+        </div>
+
+        <div className={`sidebar-card job-application-sidebar-card${todayJobApplicationProgress.scheduled && todayJobApplicationProgress.completed < todayJobApplicationProgress.total ? ' is-due' : todayJobApplicationProgress.scheduled ? ' is-complete' : ' is-not-due'}`}>
+          <div className="job-sidebar-heading">
+            <span className="muted-label">Apply for jobs today</span>
+            <strong className={todayJobApplicationProgress.scheduled ? 'job-sidebar-status due' : 'job-sidebar-status'}>
+              {todayJobApplicationProgress.scheduled ? todayJobApplicationProgress.completed === todayJobApplicationProgress.total ? 'Due · Complete' : 'Due today' : 'Not due'}
+            </strong>
+          </div>
+          <strong>{todayJobApplicationProgress.scheduled ? `${todayJobApplicationProgress.completed}/${todayJobApplicationProgress.total} platform checks` : 'No job-search block today'}</strong>
+          <div className="progressbar"><span style={{ width: `${todayJobApplicationProgress.scheduled ? todayJobApplicationProgress.completionPercent : 0}%` }} /></div>
+          <div className="job-sidebar-tracks">
+            <span>Android {todayJobApplicationProgress.androidCompleted}/3</span>
+            <span>Spring Boot {todayJobApplicationProgress.springBootCompleted}/3</span>
+          </div>
+          <button className="secondary-button" type="button" onClick={() => navigateToView('interviews')}>Open revision checklist</button>
         </div>
 
         <nav className="nav" aria-label="Main navigation">
@@ -1245,7 +1280,7 @@ export default function App() {
                   input.click();
                 }}>Import Progress</button>
                 <button className="secondary-button" type="button" onClick={() => {
-                  const exportData = JSON.stringify({ ...interviewStore, exportedAt: new Date().toISOString() }, null, 2);
+                  const exportData = JSON.stringify({ ...interviewStore, jobApplications: jobApplicationStore, exportedAt: new Date().toISOString() }, null, 2);
                   const blob = new Blob([exportData], { type: 'application/json' });
                   const url = URL.createObjectURL(blob);
                   const anchor = document.createElement('a');
@@ -1265,8 +1300,9 @@ export default function App() {
                     reader.onload = () => {
                       try {
                         const parsed = JSON.parse(String(reader.result));
-                        if (parsed?.version === 1 && Array.isArray(parsed.catalog) && Array.isArray(parsed.interviews)) {
+                        if (parsed?.version === 1 && Array.isArray(parsed.catalog) && Array.isArray(parsed.interviews) && (parsed.jobApplications === undefined || isJobApplicationStore(parsed.jobApplications))) {
                           setInterviewStore({ version: 1, catalog: parsed.catalog, interviews: parsed.interviews });
+                          if (parsed.jobApplications) setJobApplicationStore(parsed.jobApplications);
                         } else {
                           window.alert('Invalid revision data file.');
                         }
@@ -1289,7 +1325,7 @@ export default function App() {
         )}
 
         {view === 'interviews' && (
-          <InterviewPlanner store={interviewStore} onChange={setInterviewStore} />
+          <InterviewPlanner store={interviewStore} onChange={setInterviewStore} jobApplicationStore={jobApplicationStore} onJobApplicationChange={setJobApplicationStore} />
         )}
         {(view === 'complete-revision' || view === 'sample-interview') && (
           <Suspense fallback={<div className="feature-loading" role="status">Loading question bank…</div>}>

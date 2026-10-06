@@ -151,7 +151,7 @@ const roadmapQuestionCatalog: Array<{
   { id: 1, level: 1, levelTitle: 'Basic String Operations', title: 'Reverse a String', topic: 'String', difficulty: 'Easy', concepts: ['reversed()', 'loop'], keywords: ['length', 'get', 'StringBuilder'], description: 'Given a string, reverse it and return the result.' },
   { id: 2, level: 1, levelTitle: 'Basic String Operations', title: 'Check if String is Palindrome', topic: 'String', difficulty: 'Easy', concepts: ['indexing', 'reversed()'], keywords: ['startsWith', 'endsWith', 'substring'], description: 'Determine whether a string reads the same forward and backward.' },
   { id: 3, level: 1, levelTitle: 'Basic String Operations', title: 'Count vowels in a String', topic: 'String', difficulty: 'Easy', concepts: ['contains', 'loop'], keywords: ['contains', 'toCharArray'], description: 'Count the number of vowels in a string.' },
-  { id: 4, level: 1, levelTitle: 'Basic String Operations', title: 'Count each character in a String', topic: 'HashMap', difficulty: 'Easy', concepts: ['HashMap', 'get', 'put'], keywords: ['HashMap', 'get', 'put'], description: 'Count each character present in the string.' },
+  { id: 4, level: 1, levelTitle: 'Basic String Operations', title: 'Count each character in a String', topic: 'HashMap', difficulty: 'Easy', concepts: ['HashMap', 'get', 'put'], keywords: ['HashMap', 'get', 'put'], description: 'Input: "banana". Output: b1a3n2, with each character followed by its count in first-appearance order.' },
   { id: 5, level: 1, levelTitle: 'Basic String Operations', title: 'Find duplicate characters', topic: 'HashMap', difficulty: 'Easy', concepts: ['HashMap', 'containsKey'], keywords: ['HashMap', 'containsKey'], description: 'Return the duplicate characters found in a string.' },
   { id: 6, level: 1, levelTitle: 'Basic String Operations', title: 'Find first non-repeating character', topic: 'HashMap', difficulty: 'Medium', concepts: ['HashMap', 'get'], keywords: ['HashMap', 'get', 'keys'], description: 'Return the first character that does not repeat.' },
   { id: 7, level: 1, levelTitle: 'Basic String Operations', title: 'Find first repeating character', topic: 'HashSet', difficulty: 'Easy', concepts: ['HashSet', 'contains'], keywords: ['HashSet', 'contains'], description: 'Identify the first character that repeats.' },
@@ -1984,7 +1984,7 @@ export function getProblemExamples(problem: Problem): Example[] {
   if (title.includes('reverse a string')) return [{ input: '"hello"', output: '"olleh"' }];
   if (title.includes('palindrome')) return [{ input: '"level"', output: 'true' }];
   if (title.includes('count vowels')) return [{ input: '"interview"', output: '4' }];
-  if (title.includes('count each character') || title.includes('character frequency')) return [{ input: '"banana"', output: '{b=1, a=3, n=2}' }];
+  if (title.includes('count each character') || title.includes('character frequency')) return [{ input: '"banana"', output: 'b1a3n2' }];
   if (title.includes('duplicate characters')) return [{ input: '"programming"', output: '[r, g, m]' }];
   if (title.includes('first non-repeating')) return [{ input: '"swiss"', output: 'w' }];
   if (title.includes('first repeating')) return [{ input: '"swiss"', output: 's' }];

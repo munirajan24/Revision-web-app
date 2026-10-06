@@ -1,6 +1,18 @@
 {
   "kotlin": [
     {
+      "label": "String Output (Loop)",
+      "code": "fun charCount(input: String): String {\n    val counts = linkedMapOf<Char, Int>()\n    for (char in input) {\n        counts[char] = (counts[char] ?: 0) + 1\n    }\n    return counts.entries.joinToString(\"\") { \"${it.key}${it.value}\" }\n}",
+      "recommendation": "Best",
+      "note": "Keeps characters in first-seen order and returns each character followed by its count, such as banana -> b1a3n2."
+    },
+    {
+      "label": "String Output (groupingBy)",
+      "code": "fun charCount(input: String): String =\n    input.groupingBy { it }.eachCount()\n        .entries.joinToString(\"\") { \"${it.key}${it.value}\" }",
+      "recommendation": "Good to try",
+      "note": "A concise groupingBy version that returns characters and counts in first-seen order."
+    },
+    {
       "label": "Basic Solution",
       "code": "fun countEachCharacterInAString(input: String): Map<Char, Int> {\n    return input.groupingBy { it }.eachCount()\n}",
       "recommendation": "Good to try",

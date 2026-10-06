@@ -2,7 +2,9 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { getProblemById, getProblemExamples, getProblemHintsForLanguage, getProblemSolution, getProblemSolutions, getSolutionComplexity, getSolutionFlow, keywordCatalog, levelMeta, loadProblemSolutions, problems, type SolutionLanguage, type SolutionVariant } from './data/roadmap';
 import { getSyntaxReturnType, syntaxReference } from './data/syntax-reference';
 import { calculateMastery, getNextReviewDate } from './engine/mastery';
+import { getProblemImportanceLabel, normalizeProblemImportanceEntry, problemImportanceOptions, type ProblemImportance } from './engine/problem-importance';
 import InterviewPlanner from './components/InterviewPlanner';
+import ProblemImportanceRating from './components/ProblemImportanceRating';
 import { seedSkillChecklists } from './data/skill-checklists';
 import { loadInterviewStore, saveInterviewStore, type InterviewStore } from './engine/interviews';
 import { getJobApplicationProgress, getLocalDateKey, isJobApplicationStore, loadJobApplicationStore, saveJobApplicationStore, type JobApplicationStore } from './engine/job-applications';
@@ -14,6 +16,8 @@ type View = 'dashboard' | 'questions' | 'practice' | 'keywords' | 'reference' | 
 type AppLanguage = 'kotlin' | 'java';
 type TrainingMode = 'learning' | 'practice';
 type ProgressStatus = 'not_started' | 'learning' | 'practicing' | 'strong' | 'mastered';
+type ImportanceFilter = 'all' | 'unrated' | `${ProblemImportance}`;
+type ImportanceSort = 'default' | 'highest' | 'lowest';
 
 const viewByTab: Record<string, View> = {
   dashboard: 'dashboard',
@@ -83,7 +87,7 @@ interface ProgressEntry {
   nextReviewAt?: string;
   reviewIntervalDays: number;
   bookmarked: boolean;
-  important: boolean;
+  importance?: ProblemImportance;
 }
 
 const STORAGE_KEY = 'kotlin-interview-trainer-state';
@@ -160,8 +164,13 @@ const DEFAULT_PROGRESS: ProgressEntry = {
   notes: '',
   reviewIntervalDays: 1,
   bookmarked: false,
-  important: false,
 };
+
+function normalizeProgressEntries(entries: Record<number, ProgressEntry & { important?: unknown }>): Record<number, ProgressEntry> {
+  return Object.fromEntries(
+    Object.entries(entries).map(([id, entry]) => [id, normalizeProblemImportanceEntry(entry)])
+  ) as Record<number, ProgressEntry>;
+}
 
 function formatSeconds(totalSeconds: number): string {
   const minutes = Math.floor(totalSeconds / 60);
@@ -198,7 +207,7 @@ function loadState(): {
   try {
     const parsed = JSON.parse(raw);
     return {
-      progress: { ...buildDefaultProgressMap(), ...(parsed.progress ?? {}) },
+      progress: normalizeProgressEntries({ ...buildDefaultProgressMap(), ...(parsed.progress ?? {}) }),
       drafts: parsed.drafts ?? {},
       theme: parsed.theme ?? 'dark',
       language: parsed.language === 'java' ? 'java' : 'kotlin',
@@ -236,6 +245,8 @@ export default function App() {
   const [levelFilter, setLevelFilter] = useState('all');
   const [difficultyFilter, setDifficultyFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [importanceFilter, setImportanceFilter] = useState<ImportanceFilter>('all');
+  const [importanceSort, setImportanceSort] = useState<ImportanceSort>('default');
   const [showWeakOnly, setShowWeakOnly] = useState(false);
   const [timerSeconds, setTimerSeconds] = useState(0);
   const [timerRunning, setTimerRunning] = useState(false);
@@ -381,9 +392,24 @@ export default function App() {
     const matchesLevel = levelFilter === 'all' || String(problem.level) === levelFilter;
     const matchesDifficulty = difficultyFilter === 'all' || problem.difficulty === difficultyFilter;
     const matchesStatus = statusFilter === 'all' || record.status === statusFilter;
+    const matchesImportance = importanceFilter === 'all'
+      || (importanceFilter === 'unrated'
+        ? record.importance === undefined
+        : record.importance === Number(importanceFilter));
     const matchesWeakOnly = !showWeakOnly || ['not_started', 'learning', 'practicing'].includes(record.status);
-    return matchesSearch && matchesLevel && matchesDifficulty && matchesStatus && matchesWeakOnly;
+    return matchesSearch && matchesLevel && matchesDifficulty && matchesStatus && matchesImportance && matchesWeakOnly;
   });
+
+  const sortedQuestions = importanceSort === 'default'
+    ? filteredQuestions
+    : [...filteredQuestions].sort((first, second) => {
+      const firstImportance = progress[first.id]?.importance ?? 0;
+      const secondImportance = progress[second.id]?.importance ?? 0;
+      const ratingOrder = importanceSort === 'highest'
+        ? secondImportance - firstImportance
+        : firstImportance - secondImportance;
+      return ratingOrder || first.id - second.id;
+    });
 
   const topicMastery = useMemo(() => {
     const summary = new Map<string, number>();
@@ -493,7 +519,7 @@ export default function App() {
   };
 
   const getQuestionSurfOrder = () => {
-    const visibleIds = filteredQuestions.map((problem) => problem.id);
+    const visibleIds = sortedQuestions.map((problem) => problem.id);
     if (visibleIds.length > 0) {
       return visibleIds;
     }
@@ -571,7 +597,7 @@ export default function App() {
           <div className="logo">{activeLanguageText.shortCode}</div>
           <div>
             <p className="eyebrow">{activeLanguageText.appName}</p>
-            <h2>Practice cockpit</h2>
+            <h2>Coding practice</h2>
           </div>
         </div>
 
@@ -592,26 +618,57 @@ export default function App() {
         </div>
 
         <nav className="nav" aria-label="Main navigation">
+          <button
+            type="button"
+            className={view === 'dashboard' ? 'nav-item nav-overview active' : 'nav-item nav-overview'}
+            onClick={() => navigateToView('dashboard')}
+          >
+            Dashboard
+          </button>
           {[
-            ['dashboard', 'Dashboard'],
-            ['questions', 'Questions'],
-            ['interviews', 'Revision checklist'],
-            ['complete-revision', 'Complete revision'],
-            ['sample-interview', 'Sample interview'],
-            ['practice', 'Practice'],
-            ['keywords', 'Keywords'],
-            ['reference', 'Syntax'],
-            ['analytics', 'Analytics'],
-            ['settings', 'Settings'],
-          ].map(([name, label]) => (
-            <button
-              key={name}
-              type="button"
-              className={view === name ? 'nav-item active' : 'nav-item'}
-              onClick={() => navigateToView(name as View)}
-            >
-              {label}
-            </button>
+            {
+              id: 'coding',
+              label: 'Coding',
+              items: [
+                ['questions', 'Coding Questions'],
+                ['practice', 'Coding Practice'],
+                ['keywords', 'Keywords'],
+                ['reference', 'Syntax'],
+              ],
+            },
+            {
+              id: 'interview',
+              label: 'Interview Prep',
+              items: [
+                ['interviews', 'Revision checklist'],
+                ['complete-revision', 'Complete revision'],
+                ['sample-interview', 'Sample interview'],
+              ],
+            },
+            {
+              id: 'workspace',
+              label: 'Workspace',
+              items: [
+                ['analytics', 'Analytics'],
+                ['settings', 'Settings'],
+              ],
+            },
+          ].map((group) => (
+            <div className={`nav-section nav-section-${group.id}`} key={group.id} role="group" aria-labelledby={`nav-section-${group.id}`}>
+              <h3 id={`nav-section-${group.id}`} className="nav-section-heading">{group.label}</h3>
+              <div className="nav-section-items">
+                {group.items.map(([name, label]) => (
+                  <button
+                    key={name}
+                    type="button"
+                    className={view === name ? 'nav-item active' : 'nav-item'}
+                    onClick={() => navigateToView(name as View)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
           ))}
         </nav>
 
@@ -627,8 +684,8 @@ export default function App() {
           <div>
             <h1>
               {view === 'dashboard' && 'Dashboard'}
-              {view === 'questions' && 'Question library'}
-              {view === 'practice' && `${mode === 'learning' ? 'Learning' : 'Practice'} mode`}
+              {view === 'questions' && 'Coding Questions'}
+              {view === 'practice' && (mode === 'learning' ? 'Learning mode' : 'Coding Practice')}
               {view === 'keywords' && 'Keyword trainer'}
               {view === 'reference' && 'Syntax'}
               {view === 'analytics' && 'Analytics'}
@@ -698,7 +755,7 @@ export default function App() {
               <h3>What should I learn?</h3>
               <p>Based on your activity, prioritize HashMap patterns, sliding-window questions, and {activeLanguageText.primaryLanguage.toLowerCase()} collection usage.</p>
               <div className="action-row">
-                <button className="primary-button" type="button" onClick={() => navigateToView('questions')}>Start 10-Minute Practice</button>
+                <button className="primary-button" type="button" onClick={() => navigateToView('questions')}>Start 10-Minute Coding Practice</button>
                 <button className="secondary-button" type="button" onClick={() => { setMode('learning'); navigateToView('questions'); }}>Start Guided Learning</button>
               </div>
             </section>
@@ -708,7 +765,7 @@ export default function App() {
         {view === 'questions' && (
           <div className="questions-layout">
             <div className="card toolbar-card">
-              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search problem, keyword" aria-label="Search questions" />
+              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search problem, keyword" aria-label="Search coding questions" />
               <div className="filter-row">
                 <select value={levelFilter} onChange={(event) => setLevelFilter(event.target.value)}>
                   <option value="all">All levels</option>
@@ -728,26 +785,47 @@ export default function App() {
                   <option value="strong">Strong</option>
                   <option value="mastered">Mastered</option>
                 </select>
+                <select aria-label="Filter by importance" value={importanceFilter} onChange={(event) => setImportanceFilter(event.target.value as ImportanceFilter)}>
+                  <option value="all">All importance</option>
+                  <option value="unrated">☆ Not Rated / New</option>
+                  {problemImportanceOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {'★'.repeat(option.value)} {getProblemImportanceLabel(option.value)}
+                    </option>
+                  ))}
+                </select>
+                <select aria-label="Sort by importance" value={importanceSort} onChange={(event) => setImportanceSort(event.target.value as ImportanceSort)}>
+                  <option value="default">Default order</option>
+                  <option value="highest">★★★★★ Most important first</option>
+                  <option value="lowest">★ Least important first</option>
+                </select>
                 <label><input type="checkbox" checked={showWeakOnly} onChange={(event) => setShowWeakOnly(event.target.checked)} /> Weak only</label>
               </div>
             </div>
 
             <div className="question-grid">
-              {filteredQuestions.map((problem) => {
+              {sortedQuestions.map((problem) => {
                 const record = progress[problem.id] ?? { ...DEFAULT_PROGRESS };
                 return (
-                  <button key={problem.id} type="button" className="question-card" onClick={() => openQuestion(problem.id)}>
-                    <div className="card-header">
-                      <span className="question-number">#{problem.id}</span>
-                      <span className={`status-pill status-${record.status}`}>{record.status.replace('_', ' ')}</span>
-                    </div>
-                    <h4>{problem.title}</h4>
-                    <div className="meta-line"><span>{problem.levelTitle}</span><span>{problem.difficulty}</span></div>
-                    <p>{problem.topic}</p>
-                    <div className="chip-row">
-                      {problem.keywords.slice(0, 3).map((keyword) => <span key={keyword} className="chip">{keyword}</span>)}
-                    </div>
-                  </button>
+                  <article key={problem.id} className="question-card">
+                    <button type="button" className="question-card-open" onClick={() => openQuestion(problem.id)}>
+                      <div className="card-header">
+                        <span className="question-number">#{problem.id}</span>
+                        <span className={`status-pill status-${record.status}`}>{record.status.replace('_', ' ')}</span>
+                      </div>
+                      <h4>{problem.title}</h4>
+                      <div className="meta-line"><span>{problem.levelTitle}</span><span>{problem.difficulty}</span></div>
+                      <p>{problem.topic}</p>
+                      <div className="chip-row">
+                        {problem.keywords.slice(0, 3).map((keyword) => <span key={keyword} className="chip">{keyword}</span>)}
+                      </div>
+                    </button>
+                    <ProblemImportanceRating
+                      value={record.importance}
+                      onChange={(importance) => updateProgress(problem.id, { importance })}
+                      compact
+                    />
+                  </article>
                 );
               })}
             </div>
@@ -781,6 +859,11 @@ export default function App() {
                   Next →
                 </button>
               </div>
+
+              <ProblemImportanceRating
+                value={progress[selectedProblem.id]?.importance}
+                onChange={(importance) => updateProgress(selectedProblem.id, { importance })}
+              />
 
               {mode === 'learning' ? (
                 <div className="simple-learning">
@@ -1269,7 +1352,7 @@ export default function App() {
                       try {
                         const parsed = JSON.parse(String(reader.result));
                         if (parsed && parsed.progress) {
-                          setProgress((current) => ({ ...current, ...parsed.progress }));
+                          setProgress((current) => normalizeProgressEntries({ ...current, ...parsed.progress }));
                         }
                       } catch {
                         window.alert('Invalid progress file.');

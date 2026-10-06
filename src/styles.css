@@ -981,9 +981,17 @@ body[data-theme='light'] .solution-chip.active {
 .text-action { justify-self: start; padding: 4px 0; border: 0; background: transparent; color: var(--primary); font-size: 0.75rem; font-weight: 700; }
 .confirmation-overlay { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; padding: 20px; background: rgba(4, 8, 16, 0.76); }
 .confirmation-dialog { width: min(500px, 100%); padding: 24px; border: 1px solid var(--border); border-top: 3px solid var(--danger); background: var(--panel); box-shadow: var(--shadow); }
+.progress-import-dialog { max-height: calc(100vh - 40px); overflow-y: auto; border-top-color: var(--primary); }
 .confirmation-dialog .eyebrow { margin-bottom: 7px; }
 .confirmation-dialog h2 { margin: 0; font-size: 1.25rem; line-height: 1.4; overflow-wrap: anywhere; }
 .confirmation-copy { margin: 12px 0 18px; color: var(--muted); font-size: 0.85rem; line-height: 1.55; }
+.confirmation-copy strong { color: var(--text); overflow-wrap: anywhere; }
+.progress-import-choices { display: grid; gap: 8px; }
+.progress-import-choices > div { display: grid; gap: 4px; padding: 10px 12px; border-left: 3px solid var(--primary); background: color-mix(in srgb, var(--primary) 6%, var(--card)); }
+.progress-import-choices > div:last-child { border-left-color: var(--danger); }
+.progress-import-choices strong { font-size: 0.85rem; }
+.progress-import-choices span { color: var(--muted); font-size: 0.78rem; line-height: 1.45; }
+.progress-import-status { margin: 0; color: var(--muted); font-size: 0.78rem; line-height: 1.45; }
 .confirmation-input-label { display: grid; gap: 7px; color: var(--muted); font-size: 0.77rem; }
 .confirmation-input-label strong { color: var(--text); overflow-wrap: anywhere; }
 .confirmation-input-label input { width: 100%; border-radius: 6px; }

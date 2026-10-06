@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { interviewQuestions, type InterviewQuestion, type QuestionCategoryId } from '../data/interview-question-bank';
+import { COMPLETE_REVISION_PROGRESS_KEY, loadCompleteRevisionProgress, saveCompleteRevisionProgress, type CompleteRevisionQuestionProgress } from '../engine/complete-revision-progress';
 import QuestionAnswer from './QuestionAnswer';
 
 type ReviewStatus = 'learning' | 'mastered';
 type StatusFilter = 'all' | 'new' | ReviewStatus;
-type QuestionProgress = { status?: ReviewStatus; bookmarked?: boolean };
+type QuestionProgress = CompleteRevisionQuestionProgress;
 
-const PROGRESS_KEY = 'kotlin-interview-trainer-question-bank-progress-v1';
 const PAGE_SIZE = 40;
 const categories: Array<{ id: QuestionCategoryId | 'all'; label: string }> = [
   { id: 'all', label: 'All categories' },
@@ -24,10 +24,10 @@ export default function CompleteRevision() {
   const [bookmarkedOnly, setBookmarkedOnly] = useState(false);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
-  const [progress, setProgress] = useState<Record<string, QuestionProgress>>(loadProgress);
+  const [progress, setProgress] = useState<Record<string, QuestionProgress>>(() => loadCompleteRevisionProgress(localStorage));
 
   useEffect(() => {
-    localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress));
+    saveCompleteRevisionProgress(localStorage, progress);
   }, [progress]);
 
   const filteredQuestions = useMemo(() => {
@@ -153,13 +153,4 @@ export default function CompleteRevision() {
       )}
     </section>
   );
-}
-
-function loadProgress(): Record<string, QuestionProgress> {
-  try {
-    const stored = localStorage.getItem(PROGRESS_KEY);
-    return stored ? JSON.parse(stored) as Record<string, QuestionProgress> : {};
-  } catch {
-    return {};
-  }
 }

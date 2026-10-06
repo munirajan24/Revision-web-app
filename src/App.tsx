@@ -3,11 +3,14 @@ import { getProblemById, getProblemExamples, getProblemHintsForLanguage, getProb
 import { getSyntaxReturnType, syntaxReference } from './data/syntax-reference';
 import { calculateMastery, getNextReviewDate } from './engine/mastery';
 import { getProblemImportanceLabel, normalizeProblemImportanceEntry, problemImportanceOptions, type ProblemImportance } from './engine/problem-importance';
+import { createAppBackup, mergeInterviewStores, mergeJobApplicationStores, mergeProgressRecords, parseAppBackup, replaceProgressRecords, type AppBackupSection, type ParsedAppBackup } from './engine/app-backup';
+import { loadCompleteRevisionProgress, mergeCompleteRevisionProgress, saveCompleteRevisionProgress } from './engine/complete-revision-progress';
+import type { BackupTheme } from './engine/progress-transfer';
 import InterviewPlanner from './components/InterviewPlanner';
 import ProblemImportanceRating from './components/ProblemImportanceRating';
 import { seedSkillChecklists } from './data/skill-checklists';
 import { loadInterviewStore, saveInterviewStore, type InterviewStore } from './engine/interviews';
-import { getJobApplicationProgress, getLocalDateKey, isJobApplicationStore, loadJobApplicationStore, saveJobApplicationStore, type JobApplicationStore } from './engine/job-applications';
+import { getJobApplicationProgress, getLocalDateKey, loadJobApplicationStore, saveJobApplicationStore, type JobApplicationStore } from './engine/job-applications';
 
 const CompleteRevision = lazy(() => import('./components/CompleteRevision'));
 const SampleInterview = lazy(() => import('./components/SampleInterview'));
@@ -18,6 +21,13 @@ type TrainingMode = 'learning' | 'practice';
 type ProgressStatus = 'not_started' | 'learning' | 'practicing' | 'strong' | 'mastered';
 type ImportanceFilter = 'all' | 'unrated' | `${ProblemImportance}`;
 type ImportanceSort = 'default' | 'highest' | 'lowest';
+
+const backupSectionLabels: Record<AppBackupSection, string> = {
+  coding: 'Coding progress and drafts',
+  completeRevision: 'Complete Revision question progress',
+  interviews: 'Interview and checklist data',
+  jobApplications: 'Job-application calendar',
+};
 
 const viewByTab: Record<string, View> = {
   dashboard: 'dashboard',
@@ -178,6 +188,10 @@ function formatSeconds(totalSeconds: number): string {
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
+function formatExportTimestamp(date: Date): string {
+  return date.toISOString().replace(/:/g, '-').replace(/\.\d{3}Z$/, 'Z');
+}
+
 function buildDefaultProgressMap(): Record<number, ProgressEntry> {
   return Object.fromEntries(
     problems.map((problem) => [problem.id, { ...DEFAULT_PROGRESS }])
@@ -187,7 +201,7 @@ function buildDefaultProgressMap(): Record<number, ProgressEntry> {
 function loadState(): {
   progress: Record<number, ProgressEntry>;
   drafts: Record<number, string>;
-  theme: string;
+  theme: BackupTheme;
   language: AppLanguage;
   selectedProblemId: number;
   mode: TrainingMode;
@@ -209,7 +223,7 @@ function loadState(): {
     return {
       progress: normalizeProgressEntries({ ...buildDefaultProgressMap(), ...(parsed.progress ?? {}) }),
       drafts: parsed.drafts ?? {},
-      theme: parsed.theme ?? 'dark',
+      theme: parsed.theme === 'light' || parsed.theme === 'system' ? parsed.theme : 'dark',
       language: parsed.language === 'java' ? 'java' : 'kotlin',
       selectedProblemId: parsed.selectedProblemId ?? 1,
       mode: parsed.mode === 'learning' ? 'learning' : 'practice',
@@ -236,6 +250,8 @@ export default function App() {
   const [language, setLanguage] = useState<AppLanguage>(initial.language);
   const [progress, setProgress] = useState<Record<number, ProgressEntry>>(initial.progress);
   const [drafts, setDrafts] = useState<Record<number, string>>(initial.drafts);
+  const [pendingProgressImport, setPendingProgressImport] = useState<{ fileName: string; backup: ParsedAppBackup } | null>(null);
+  const [progressImportStatus, setProgressImportStatus] = useState('');
   const [selectedProblemId, setSelectedProblemId] = useState(initial.selectedProblemId);
   const [mode, setMode] = useState<TrainingMode>(initial.mode);
   const [interviewStore, setInterviewStore] = useState<InterviewStore>(initialInterviewStore);
@@ -588,6 +604,93 @@ export default function App() {
 
   const saveNote = () => {
     updateProgress(selectedProblemId, { notes, status: progress[selectedProblemId]?.status ?? 'learning' });
+  };
+
+  const exportProgress = () => {
+    const exportedAt = new Date();
+    const backup = createAppBackup({
+      coding: {
+        progress: progress as unknown as Record<number, Record<string, unknown> & { important?: boolean; importance?: ProblemImportance | null }>,
+        drafts,
+        theme: theme as BackupTheme,
+        language,
+        selectedProblemId,
+        mode,
+      },
+      completeRevisionProgress: loadCompleteRevisionProgress(localStorage),
+      interviews: interviewStore,
+      jobApplications: jobApplicationStore,
+    }, exportedAt.toISOString());
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${activeLanguageText.exportPrefix}-interview-trainer-full-backup-${formatExportTimestamp(exportedAt)}.json`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  const beginProgressImport = () => {
+    setProgressImportStatus('');
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/json,.json';
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onerror = () => setProgressImportStatus('Could not read that file. No progress was changed.');
+      reader.onload = () => {
+        const backup = parseAppBackup(String(reader.result ?? ''), problems.map((problem) => problem.id));
+        if (!backup) {
+          setProgressImportStatus('This backup is invalid or unsupported. No data was changed.');
+          return;
+        }
+
+        setPendingProgressImport({ fileName: file.name, backup });
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  };
+
+  const applyProgressImport = (replace: boolean) => {
+    if (!pendingProgressImport) return;
+    const { backup } = pendingProgressImport;
+
+    if (replace) {
+      if (backup.coding) {
+        setProgress(replaceProgressRecords(buildDefaultProgressMap(), backup.coding.progress));
+        setDrafts(backup.coding.drafts);
+        setTheme(backup.coding.theme ?? 'dark');
+        setLanguage(backup.coding.language ?? 'kotlin');
+        setSelectedProblemId(backup.coding.selectedProblemId ?? 1);
+        setMode(backup.coding.mode ?? 'practice');
+      }
+      if (backup.completeRevisionProgress) saveCompleteRevisionProgress(localStorage, backup.completeRevisionProgress);
+      if (backup.interviews) setInterviewStore(backup.interviews);
+      if (backup.jobApplications) setJobApplicationStore(backup.jobApplications);
+      setProgressImportStatus(`Replaced backup sections: ${backup.sections.map((section) => backupSectionLabels[section]).join(', ')}.`);
+    } else {
+      if (backup.coding) {
+        setProgress((current) => mergeProgressRecords(current, backup.coding!.progress));
+        setDrafts((current) => ({ ...current, ...backup.coding!.drafts }));
+      }
+      if (backup.completeRevisionProgress) {
+        saveCompleteRevisionProgress(localStorage, mergeCompleteRevisionProgress(
+          loadCompleteRevisionProgress(localStorage),
+          backup.completeRevisionProgress,
+        ));
+      }
+      if (backup.interviews) setInterviewStore((current) => mergeInterviewStores(current, backup.interviews!));
+      if (backup.jobApplications) setJobApplicationStore((current) => mergeJobApplicationStores(current, backup.jobApplications!));
+      setProgressImportStatus(`Merged backup sections: ${backup.sections.map((section) => backupSectionLabels[section]).join(', ')}. Current preferences and schedule were kept.`);
+    }
+
+    setPendingProgressImport(null);
   };
 
   return (
@@ -1330,73 +1433,9 @@ export default function App() {
             <section className="card section-panel">
               <h3>Data</h3>
               <div className="option-row stacked">
-                <button className="secondary-button" type="button" onClick={() => {
-                  const exportData = JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), progress, drafts, theme }, null, 2);
-                  const blob = new Blob([exportData], { type: 'application/json' });
-                  const url = URL.createObjectURL(blob);
-                  const anchor = document.createElement('a');
-                  anchor.href = url;
-                  anchor.download = `${activeLanguageText.exportPrefix}-interview-trainer-progress.json`;
-                  anchor.click();
-                  URL.revokeObjectURL(url);
-                }}>Export Progress</button>
-                <button className="secondary-button" type="button" onClick={() => {
-                  const input = document.createElement('input');
-                  input.type = 'file';
-                  input.accept = 'application/json';
-                  input.onchange = (event) => {
-                    const file = (event.target as HTMLInputElement).files?.[0];
-                    if (!file) return;
-                    const reader = new FileReader();
-                    reader.onload = () => {
-                      try {
-                        const parsed = JSON.parse(String(reader.result));
-                        if (parsed && parsed.progress) {
-                          setProgress((current) => normalizeProgressEntries({ ...current, ...parsed.progress }));
-                        }
-                      } catch {
-                        window.alert('Invalid progress file.');
-                      }
-                    };
-                    reader.readAsText(file);
-                  };
-                  input.click();
-                }}>Import Progress</button>
-                <button className="secondary-button" type="button" onClick={() => {
-                  const exportData = JSON.stringify({ ...interviewStore, jobApplications: jobApplicationStore, exportedAt: new Date().toISOString() }, null, 2);
-                  const blob = new Blob([exportData], { type: 'application/json' });
-                  const url = URL.createObjectURL(blob);
-                  const anchor = document.createElement('a');
-                  anchor.href = url;
-                  anchor.download = 'revision-checklists-and-sessions.json';
-                  anchor.click();
-                  URL.revokeObjectURL(url);
-                }}>Export revision data</button>
-                <button className="secondary-button" type="button" onClick={() => {
-                  const input = document.createElement('input');
-                  input.type = 'file';
-                  input.accept = 'application/json';
-                  input.onchange = (event) => {
-                    const file = (event.target as HTMLInputElement).files?.[0];
-                    if (!file) return;
-                    const reader = new FileReader();
-                    reader.onload = () => {
-                      try {
-                        const parsed = JSON.parse(String(reader.result));
-                        if (parsed?.version === 1 && Array.isArray(parsed.catalog) && Array.isArray(parsed.interviews) && (parsed.jobApplications === undefined || isJobApplicationStore(parsed.jobApplications))) {
-                          setInterviewStore({ version: 1, catalog: parsed.catalog, interviews: parsed.interviews });
-                          if (parsed.jobApplications) setJobApplicationStore(parsed.jobApplications);
-                        } else {
-                          window.alert('Invalid revision data file.');
-                        }
-                      } catch {
-                        window.alert('Invalid revision data file.');
-                      }
-                    };
-                    reader.readAsText(file);
-                  };
-                  input.click();
-                }}>Import revision data</button>
+                <button className="secondary-button" type="button" onClick={exportProgress}>Export Backup</button>
+                <button className="secondary-button" type="button" onClick={beginProgressImport}>Import Backup</button>
+                {progressImportStatus && <p className="progress-import-status" role="status">{progressImportStatus}</p>}
                 <button className="danger-button" type="button" onClick={() => {
                   if (window.confirm('Reset all progress?')) {
                     setProgress(buildDefaultProgressMap());
@@ -1414,6 +1453,29 @@ export default function App() {
           <Suspense fallback={<div className="feature-loading" role="status">Loading question bank…</div>}>
             {view === 'complete-revision' ? <CompleteRevision /> : <SampleInterview />}
           </Suspense>
+        )}
+        {pendingProgressImport && (
+          <div className="confirmation-overlay" onKeyDown={(event) => {
+            if (event.key === 'Escape') setPendingProgressImport(null);
+          }}>
+            <section className="confirmation-dialog progress-import-dialog" role="dialog" aria-modal="true" aria-labelledby="progress-import-title" aria-describedby="progress-import-description">
+              <p className="eyebrow">Import progress backup</p>
+              <h2 id="progress-import-title">How should this file be imported?</h2>
+              <p className="confirmation-copy" id="progress-import-description">
+                <strong title={pendingProgressImport.fileName}>{pendingProgressImport.fileName}</strong><br />
+                Contains: {pendingProgressImport.backup.sections.map((section) => backupSectionLabels[section]).join(', ')}.
+              </p>
+              <div className="progress-import-choices">
+                <div><strong>Merge / Add</strong><span>Add imported records and update matching ones. Keep saved data in sections not included in this file.</span></div>
+                <div><strong>Replace</strong><span>Replace only the sections included in this file. Missing records within those sections reset to defaults.</span></div>
+              </div>
+              <div className="confirmation-actions">
+                <button className="secondary-button" type="button" onClick={() => setPendingProgressImport(null)}>Cancel</button>
+                <button className="primary-button" type="button" autoFocus onClick={() => applyProgressImport(false)}>Merge / Add</button>
+                <button className="danger-button" type="button" onClick={() => applyProgressImport(true)}>Replace</button>
+              </div>
+            </section>
+          </div>
         )}
       </main>
     </div>

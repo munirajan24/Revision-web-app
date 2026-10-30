@@ -3,6 +3,7 @@ import { getProblemById, getProblemExamples, getProblemHintsForLanguage, getProb
 import { getSyntaxReturnType, syntaxReference } from './data/syntax-reference';
 import { calculateMastery, getNextReviewDate } from './engine/mastery';
 import { getProblemImportanceLabel, normalizeProblemImportanceEntry, problemImportanceOptions, type ProblemImportance } from './engine/problem-importance';
+import { indentCodeSelection } from './engine/code-editor';
 import { createAppBackup, mergeInterviewStores, mergeJobApplicationStores, mergeProgressRecords, parseAppBackup, replaceProgressRecords, type AppBackupSection, type ParsedAppBackup } from './engine/app-backup';
 import { loadCompleteRevisionProgress, mergeCompleteRevisionProgress, saveCompleteRevisionProgress } from './engine/complete-revision-progress';
 import type { BackupTheme } from './engine/progress-transfer';
@@ -1111,10 +1112,33 @@ export default function App() {
                         }
                       }}
                       onKeyDown={(event) => {
-                        if (event.key === 'Tab' && autocompleteSuggestions[0]) {
-                          event.preventDefault();
+                        if (event.key !== 'Tab') return;
+
+                        event.preventDefault();
+                        const textarea = event.currentTarget;
+                        if (
+                          !event.shiftKey
+                          && autocompleteSuggestions[0]
+                          && textarea.selectionStart === textarea.selectionEnd
+                        ) {
                           applySuggestion(autocompleteSuggestions[0].label);
+                          return;
                         }
+
+                        const result = indentCodeSelection(
+                          textarea.value,
+                          textarea.selectionStart,
+                          textarea.selectionEnd,
+                          event.shiftKey
+                        );
+                        if (result.code === textarea.value) return;
+
+                        setDrafts((current) => ({ ...current, [selectedProblem.id]: result.code }));
+                        setAutocompleteSuggestions([]);
+                        requestAnimationFrame(() => {
+                          textarea.focus();
+                          textarea.setSelectionRange(result.selectionStart, result.selectionEnd);
+                        });
                       }}
                       onClick={() => {
                         const value = drafts[selectedProblem.id] ?? '';

@@ -15,8 +15,9 @@ import { getJobApplicationProgress, getLocalDateKey, loadJobApplicationStore, sa
 
 const CompleteRevision = lazy(() => import('./components/CompleteRevision'));
 const SampleInterview = lazy(() => import('./components/SampleInterview'));
+const AndroidConceptPrep = lazy(() => import('./components/AndroidConceptPrep'));
 
-type View = 'dashboard' | 'questions' | 'practice' | 'keywords' | 'reference' | 'analytics' | 'interviews' | 'complete-revision' | 'sample-interview' | 'settings';
+type View = 'dashboard' | 'questions' | 'practice' | 'keywords' | 'reference' | 'analytics' | 'interviews' | 'complete-revision' | 'sample-interview' | 'android-concepts' | 'settings';
 type AppLanguage = 'kotlin' | 'java';
 type TrainingMode = 'learning' | 'practice';
 type ProgressStatus = 'not_started' | 'learning' | 'practicing' | 'strong' | 'mastered';
@@ -42,6 +43,7 @@ const viewByTab: Record<string, View> = {
   'revision-checklist': 'interviews',
   'complete-revision': 'complete-revision',
   'sample-interview': 'sample-interview',
+  'android-concepts': 'android-concepts',
   settings: 'settings',
 };
 
@@ -55,6 +57,7 @@ const tabByView: Record<View, string> = {
   interviews: 'revision-checklist',
   'complete-revision': 'complete-revision',
   'sample-interview': 'sample-interview',
+  'android-concepts': 'android-concepts',
   settings: 'settings',
 };
 
@@ -746,6 +749,7 @@ export default function App() {
               items: [
                 ['interviews', 'Revision checklist'],
                 ['complete-revision', 'Complete revision'],
+                ['android-concepts', 'Android concepts'],
                 ['sample-interview', 'Sample interview'],
               ],
             },
@@ -795,6 +799,7 @@ export default function App() {
               {view === 'analytics' && 'Analytics'}
               {view === 'interviews' && 'Revision checklist'}
               {view === 'complete-revision' && 'Complete revision'}
+              {view === 'android-concepts' && 'Android concepts'}
               {view === 'sample-interview' && 'Sample interview'}
               {view === 'settings' && 'Settings'}
             </h1>
@@ -1473,9 +1478,13 @@ export default function App() {
         {view === 'interviews' && (
           <InterviewPlanner store={interviewStore} onChange={setInterviewStore} jobApplicationStore={jobApplicationStore} onJobApplicationChange={setJobApplicationStore} />
         )}
-        {(view === 'complete-revision' || view === 'sample-interview') && (
+        {(view === 'complete-revision' || view === 'sample-interview' || view === 'android-concepts') && (
           <Suspense fallback={<div className="feature-loading" role="status">Loading question bank…</div>}>
-            {view === 'complete-revision' ? <CompleteRevision /> : <SampleInterview />}
+            {view === 'complete-revision'
+              ? <CompleteRevision />
+              : view === 'sample-interview'
+                ? <SampleInterview />
+                : <AndroidConceptPrep />}
           </Suspense>
         )}
         {pendingProgressImport && (

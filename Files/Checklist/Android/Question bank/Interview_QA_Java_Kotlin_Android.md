@@ -40,6 +40,10 @@ Answer:
 
       **Note: Multiple inheritance is not supported in Java through class.**
 
+![Java inheritance types](/interview-source-image/image36.png)
+
+![Java class inheritance diagram](/interview-source-image/image8.png)
+
 ### J005. What is Polymorphism and types?
 
 Answer:
@@ -87,8 +91,13 @@ Answer:
 
     1. \*Writing one instance and accessing the same instance to the whole application.
 
-| public static Singleton getInstance() {    if (single\_instance \== null)        single\_instance \= new Singleton();    return single\_instance; } |
-| :---- |
+    ```java
+    public static Singleton getInstance() {
+        if (single_instance == null)
+            single_instance = new Singleton();
+        return single_instance;
+    }
+    ```
 
 ### J011. JRE vs JDK?
 
@@ -124,6 +133,8 @@ Answer:
     5. **Terminated**: When a thread has **completed** its task or has been **terminated** by an exception, it enters the terminated state. Once a thread is in this state, it cannot be restarted.
 
     6. It's important to note that a thread can move back and forth between the runnable and blocked states, depending on the availability of resources. Additionally, a thread can be suspended or resumed using methods such as sleep(), wait(), and notify().
+
+![Java thread lifecycle](/interview-source-image/image15.png)
 
 ### J015. Tell me about java collections?
 
@@ -755,8 +766,10 @@ Answer:
 
 Answer:
 
-   1. We can write code on one platform and We can run it on other platforms.
-   2. Because Java have **JVM**. It will convert bytecode into the machine language with respect to the platform.
+1. We can write code on one platform and We can run it on other platforms.
+2. Because Java have **JVM**. It will convert bytecode into the machine language with respect to the platform.
+
+![Java platform independence diagram](/interview-source-image/image63.png)
 
 ### J062. JVM?
 

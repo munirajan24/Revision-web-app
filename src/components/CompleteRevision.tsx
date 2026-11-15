@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { interviewQuestions, type InterviewQuestion, type QuestionCategoryId } from '../data/interview-question-bank';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { interviewQuestions, type InterviewQuestion } from '../data/interview-question-bank';
 import { COMPLETE_REVISION_PROGRESS_KEY, loadCompleteRevisionProgress, saveCompleteRevisionProgress, type CompleteRevisionQuestionProgress } from '../engine/complete-revision-progress';
 import QuestionAnswer from './QuestionAnswer';
 
@@ -8,43 +8,59 @@ type StatusFilter = 'all' | 'new' | ReviewStatus;
 type QuestionProgress = CompleteRevisionQuestionProgress;
 
 const PAGE_SIZE = 40;
-const categories: Array<{ id: QuestionCategoryId | 'all'; label: string }> = [
-  { id: 'all', label: 'All categories' },
-  { id: 'java', label: 'Java' },
-  { id: 'kotlin', label: 'Kotlin' },
-  { id: 'android', label: 'Android' },
-  { id: 'testing', label: 'Testing & Others' },
-  { id: 'general', label: 'General / Project / HR' },
-];
 
 export default function CompleteRevision() {
   const [search, setSearch] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState<QuestionCategoryId | 'all'>('all');
+  const [sectionFilter, setSectionFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [bookmarkedOnly, setBookmarkedOnly] = useState(false);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
   const [progress, setProgress] = useState<Record<string, QuestionProgress>>(() => loadCompleteRevisionProgress(localStorage));
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+
+  const sections = useMemo(
+    () => [...new Set(interviewQuestions.map((question) => question.section ?? question.category))],
+    [],
+  );
 
   useEffect(() => {
     saveCompleteRevisionProgress(localStorage, progress);
   }, [progress]);
 
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [bookmarkedOnly, sectionFilter, search, statusFilter]);
+
   const filteredQuestions = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
     return interviewQuestions.filter((question) => {
       const questionProgress = progress[question.id];
-      if (categoryFilter !== 'all' && question.categoryId !== categoryFilter) return false;
+      if (sectionFilter !== 'all' && (question.section ?? question.category) !== sectionFilter) return false;
       if (statusFilter === 'new' && questionProgress?.status) return false;
       if ((statusFilter === 'learning' || statusFilter === 'mastered') && questionProgress?.status !== statusFilter) return false;
       if (bookmarkedOnly && !questionProgress?.bookmarked) return false;
-      if (normalizedSearch && !`${question.id} ${question.prompt} ${question.category}`.toLowerCase().includes(normalizedSearch)) return false;
+      if (normalizedSearch && !`${question.displayId ?? question.id} ${question.prompt} ${question.category} ${question.section ?? ''}`.toLowerCase().includes(normalizedSearch)) return false;
       return true;
     });
-  }, [bookmarkedOnly, categoryFilter, progress, search, statusFilter]);
+  }, [bookmarkedOnly, progress, search, sectionFilter, statusFilter]);
 
   const visibleQuestions = filteredQuestions.slice(0, visibleCount);
-  const reviewedCount = Object.values(progress).filter((entry) => entry.status).length;
+  const reviewedCount = interviewQuestions.filter((question) => progress[question.id]?.status).length;
+
+  useEffect(() => {
+    const sentinel = loadMoreRef.current;
+    if (!sentinel || visibleCount >= filteredQuestions.length) return;
+
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) {
+        setVisibleCount((count) => Math.min(count + PAGE_SIZE, filteredQuestions.length));
+      }
+    }, { rootMargin: '300px' });
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [filteredQuestions.length, visibleCount]);
 
   const updateProgress = (questionId: string, update: Partial<QuestionProgress>) => {
     setProgress((current) => ({
@@ -75,9 +91,10 @@ export default function CompleteRevision() {
           <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search question or ID" />
         </label>
         <label>
-          <span>Category</span>
-          <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value as QuestionCategoryId | 'all')}>
-            {categories.map((category) => <option key={category.id} value={category.id}>{category.label}</option>)}
+          <span>Section</span>
+          <select value={sectionFilter} onChange={(event) => setSectionFilter(event.target.value)}>
+            <option value="all">All sections</option>
+            {sections.map((section) => <option key={section} value={section}>{section}</option>)}
           </select>
         </label>
         <label>
@@ -109,9 +126,9 @@ export default function CompleteRevision() {
               <article className="revision-question" key={question.id}>
                 <div className="revision-question-heading">
                   <button className="revision-question-toggle" type="button" aria-expanded={isExpanded} onClick={() => toggleAnswer(question.id)}>
-                    <span className="revision-question-id">{question.id}</span>
+                    <span className="revision-question-id">{question.displayId ?? question.id}</span>
                     <span className="revision-question-prompt">{question.prompt}</span>
-                    <span className="revision-question-category">{question.category}</span>
+                    <span className="revision-question-category">{question.section ?? question.category}</span>
                   </button>
                   <button
                     className={questionProgress?.bookmarked ? 'revision-bookmark active' : 'revision-bookmark'}
@@ -146,11 +163,7 @@ export default function CompleteRevision() {
       ) : (
         <div className="revision-empty-state">No questions match these filters.</div>
       )}
-      {filteredQuestions.length > visibleCount && (
-        <button className="secondary-button revision-load-more" type="button" onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}>
-          Load {Math.min(PAGE_SIZE, filteredQuestions.length - visibleCount)} more questions
-        </button>
-      )}
+      {filteredQuestions.length > visibleCount && <div ref={loadMoreRef} className="revision-load-more-sentinel" aria-hidden="true" />}
     </section>
   );
 }

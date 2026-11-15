@@ -24,7 +24,14 @@ export default function QuestionAnswer({ question }: { question: InterviewQuesti
         return `src="${imageSrc}"`;
       },
     );
-    return <div className="question-answer-content" dangerouslySetInnerHTML={{ __html: answerHtml }} />;
+    return (
+      <div
+        className="question-answer-content"
+        dangerouslySetInnerHTML={{
+          __html: answerHtml.replace(/<a(?=\s|>)/gi, '<a target="_blank" rel="noopener noreferrer"'),
+        }}
+      />
+    );
   }
 
   const answerMarkdown = question.answerMarkdown

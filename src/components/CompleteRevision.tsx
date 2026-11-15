@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import { interviewQuestions, type InterviewQuestion } from '../data/interview-question-bank';
 import { COMPLETE_REVISION_PROGRESS_KEY, loadCompleteRevisionProgress, saveCompleteRevisionProgress, type CompleteRevisionQuestionProgress } from '../engine/complete-revision-progress';
 import QuestionAnswer from './QuestionAnswer';
@@ -14,6 +14,8 @@ export default function CompleteRevision() {
   const [sectionFilter, setSectionFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [bookmarkedOnly, setBookmarkedOnly] = useState(false);
+  const [showAllAnswers, setShowAllAnswers] = useState(false);
+  const [collapsedWhileShowingAllIds, setCollapsedWhileShowingAllIds] = useState<Set<string>>(() => new Set());
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
   const [progress, setProgress] = useState<Record<string, QuestionProgress>>(() => loadCompleteRevisionProgress(localStorage));
@@ -70,12 +72,37 @@ export default function CompleteRevision() {
   };
 
   const toggleAnswer = (questionId: string) => {
+    if (showAllAnswers) {
+      setCollapsedWhileShowingAllIds((current) => {
+        const next = new Set(current);
+        if (next.has(questionId)) next.delete(questionId);
+        else next.add(questionId);
+        return next;
+      });
+      return;
+    }
+
     setExpandedIds((current) => {
       const next = new Set(current);
       if (next.has(questionId)) next.delete(questionId);
       else next.add(questionId);
       return next;
     });
+  };
+
+  const toggleShowAllAnswers = (checked: boolean) => {
+    setShowAllAnswers(checked);
+    setCollapsedWhileShowingAllIds(new Set());
+  };
+
+  const handleQuestionToggle = (event: MouseEvent<HTMLButtonElement>, questionId: string) => {
+    if (event.detail > 0) {
+      const selection = window.getSelection();
+      if (selection && !selection.isCollapsed && selection.rangeCount > 0 && selection.getRangeAt(0).intersectsNode(event.currentTarget)) {
+        return;
+      }
+    }
+    toggleAnswer(questionId);
   };
 
   return (
@@ -106,10 +133,16 @@ export default function CompleteRevision() {
             <option value="mastered">Mastered</option>
           </select>
         </label>
-        <label className="revision-bookmarks-filter">
-          <input type="checkbox" checked={bookmarkedOnly} onChange={(event) => setBookmarkedOnly(event.target.checked)} />
-          Bookmarked only
-        </label>
+        <div className="revision-bank-filter-options">
+          <label className="revision-bank-option">
+            <input type="checkbox" checked={showAllAnswers} onChange={(event) => toggleShowAllAnswers(event.target.checked)} />
+            Show all answers
+          </label>
+          <label className="revision-bookmarks-filter">
+            <input type="checkbox" checked={bookmarkedOnly} onChange={(event) => setBookmarkedOnly(event.target.checked)} />
+            Bookmarked only
+          </label>
+        </div>
       </div>
 
       <div className="revision-results-heading">
@@ -120,12 +153,14 @@ export default function CompleteRevision() {
         <div className="revision-question-list">
           {visibleQuestions.map((question: InterviewQuestion) => {
             const questionProgress = progress[question.id];
-            const isExpanded = expandedIds.has(question.id);
+            const isExpanded = showAllAnswers
+              ? !collapsedWhileShowingAllIds.has(question.id)
+              : expandedIds.has(question.id);
             const status = questionProgress?.status ?? 'new';
             return (
-              <article className="revision-question" key={question.id}>
+              <article className={isExpanded ? 'revision-question is-expanded' : 'revision-question'} key={question.id}>
                 <div className="revision-question-heading">
-                  <button className="revision-question-toggle" type="button" aria-expanded={isExpanded} onClick={() => toggleAnswer(question.id)}>
+                  <button className="revision-question-toggle" type="button" aria-expanded={isExpanded} onClick={(event) => handleQuestionToggle(event, question.id)}>
                     <span className="revision-question-id">{question.displayId ?? question.id}</span>
                     <span className="revision-question-prompt">{question.prompt}</span>
                     <span className="revision-question-category">{question.section ?? question.category}</span>

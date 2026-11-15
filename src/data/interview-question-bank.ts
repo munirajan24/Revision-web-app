@@ -33,6 +33,7 @@ export function parseInterviewQuestionHtml(html: string): InterviewQuestion[] {
   const document = parseHtml(html);
   const body = findElement(document, 'body');
   if (!body) throw new Error('Complete Revision source HTML has no body element.');
+  const monospaceClasses = getMonospaceClasses(document);
 
   const questions: InterviewQuestion[] = [];
   const sectionCounts = new Map<string, number>();
@@ -87,15 +88,16 @@ export function parseInterviewQuestionHtml(html: string): InterviewQuestion[] {
     const prompt = normalizeText(getText(getFirstElement(node, 'li')));
     if (!prompt) continue;
 
-    let answerHtml = '';
+    const answerNodes: HtmlNode[] = [];
     let answerText = '';
     for (let answerIndex = index + 1; answerIndex < children.length; answerIndex += 1) {
       const answerNode = children[answerIndex];
       if (isQuestionList(answerNode)) break;
       if (isSectionHeading(answerNode)) continue;
-      answerHtml += serializeSafeHtml(answerNode);
+      answerNodes.push(answerNode);
       answerText += getText(answerNode);
     }
+    const answerHtml = serializeSafeChildren(answerNodes, monospaceClasses);
     answerText = normalizeAnswerText(answerText);
 
     const section = [topSection, subsection].filter(Boolean).join(' / ');
@@ -281,26 +283,36 @@ const allowedStyleProperties = new Set([
   'text-align', 'text-decoration', 'transform', 'vertical-align', 'width',
 ]);
 
-function serializeSafeHtml(node: HtmlNode): string {
+function serializeSafeHtml(node: HtmlNode, monospaceClasses: ReadonlySet<string>): string {
   if (node.nodeName === '#text') return escapeHtml('value' in node ? node.value : '');
   if (!isElement(node)) return '';
   if (['script', 'style', 'iframe', 'object', 'embed', 'svg', 'math'].includes(node.tagName)) return '';
+  if (node.tagName === 'pre') {
+    return `<pre class="question-answer-code"><code>${highlightSourceCode(getCodeText(node))}</code></pre>`;
+  }
+  if (node.tagName === 'code') {
+    return `<code class="answer-code">${highlightSourceCode(getCodeText(node))}</code>`;
+  }
+  if (node.tagName === 'p' && isCodeOnly(node, monospaceClasses)) {
+    return `<pre class="question-answer-code"><code>${highlightSourceCode(normalizeCodeText(getCodeText(node)))}</code></pre>`;
+  }
   if (node.tagName === 'span') {
     const imageCrop = getImageCrop(node);
     if (imageCrop) {
       const { image, frameWidth, frameHeight, imageWidth, imageHeight, imageLeft, imageTop } = imageCrop;
-      const imageHtml = serializeSafeHtml(image).replace(
+      const imageHtml = serializeSafeHtml(image, monospaceClasses).replace(
         /\/?>$/,
         ` style="position: absolute; width: ${toPercent(imageWidth, frameWidth)}%; height: ${toPercent(imageHeight, frameHeight)}%; left: ${toPercent(imageLeft, frameWidth)}%; top: ${toPercent(imageTop, frameHeight)}%; margin: 0" />`,
       );
       return `<div class="question-answer-image-frame" style="aspect-ratio: ${frameWidth} / ${frameHeight}">${imageHtml}</div>`;
     }
   }
-  const innerHtml = node.childNodes.map(serializeSafeHtml).join('');
+  const innerHtml = serializeSafeChildren(node.childNodes, monospaceClasses);
   if (node.tagName === 'span') {
-    const classes = new Set((getAttribute(node, 'class') ?? '').split(/\s+/));
-    const formatted = classes.has('c23') ? `<code>${innerHtml}</code>` : innerHtml;
-    return classes.has('c12') ? `<strong>${formatted}</strong>` : formatted;
+    const formatted = isMonospaceSpan(node, monospaceClasses)
+      ? `<code class="answer-code">${highlightSourceCode(getCodeText(node))}</code>`
+      : innerHtml;
+    return (getAttribute(node, 'class') ?? '').split(/\s+/).includes('c12') ? `<strong>${formatted}</strong>` : formatted;
   }
   if (!allowedTags.has(node.tagName)) return innerHtml;
 
@@ -323,7 +335,176 @@ function serializeSafeHtml(node: HtmlNode): string {
   }
 
   const openTag = `<${node.tagName}${attributes.length ? ` ${attributes.join(' ')}` : ''}>`;
+  if (node.tagName === 'table') {
+    return `<div class="question-answer-table-scroll">${openTag}${innerHtml}</${node.tagName}></div>`;
+  }
   return voidTags.has(node.tagName) ? openTag : `${openTag}${innerHtml}</${node.tagName}>`;
+}
+
+function serializeSafeChildren(children: HtmlNode[], monospaceClasses: ReadonlySet<string>): string {
+  let html = '';
+  for (let index = 0; index < children.length;) {
+    const child = children[index];
+    if (isCodeParagraph(child, monospaceClasses)) {
+      const paragraphs: HtmlElement[] = [];
+      let nextIndex = index;
+      while (nextIndex < children.length) {
+        const candidate = children[nextIndex];
+        if (isCodeParagraph(candidate, monospaceClasses)) {
+          if (isElement(candidate)) paragraphs.push(candidate);
+          nextIndex += 1;
+          continue;
+        }
+
+        const blankParagraphs: HtmlElement[] = [];
+        let afterGap = nextIndex;
+        while (afterGap < children.length) {
+          const gapNode = children[afterGap];
+          if (isWhitespaceText(gapNode)) {
+            afterGap += 1;
+          } else if (isBlankParagraph(gapNode)) {
+            blankParagraphs.push(gapNode);
+            afterGap += 1;
+          } else {
+            break;
+          }
+        }
+        if (blankParagraphs.length && isCodeParagraph(children[afterGap], monospaceClasses)) {
+          paragraphs.push(...blankParagraphs);
+          nextIndex = afterGap;
+          continue;
+        }
+        if (afterGap > nextIndex && blankParagraphs.length === 0 && isCodeParagraph(children[afterGap], monospaceClasses)) {
+          nextIndex = afterGap;
+          continue;
+        }
+        break;
+      }
+      const code = paragraphs.map((paragraph) => normalizeCodeText(getCodeText(paragraph))).join('\n');
+      html += `<pre class="question-answer-code"><code>${highlightSourceCode(code)}</code></pre>`;
+      index = nextIndex;
+      continue;
+    }
+
+    if (isElement(child) && isMonospaceSpan(child, monospaceClasses)) {
+      let code = getCodeText(child);
+      let nextIndex = index + 1;
+    while (nextIndex < children.length) {
+      const sibling = children[nextIndex];
+      if (!isElement(sibling) || !isMonospaceSpan(sibling, monospaceClasses)) break;
+      code += getCodeText(sibling);
+      nextIndex += 1;
+    }
+      html += `<code class="answer-code">${highlightSourceCode(code)}</code>`;
+      index = nextIndex;
+      continue;
+    }
+
+    html += serializeSafeHtml(child, monospaceClasses);
+    index += 1;
+  }
+  return html;
+}
+
+function isMonospaceSpan(node: HtmlElement, monospaceClasses: ReadonlySet<string>): boolean {
+  return node.tagName === 'span'
+    && (getAttribute(node, 'class') ?? '').split(/\s+/).some((className) => monospaceClasses.has(className));
+}
+
+function isCodeParagraph(node: HtmlNode | undefined, monospaceClasses: ReadonlySet<string>): node is HtmlElement {
+  return node !== undefined
+    && isElement(node)
+    && node.tagName === 'p'
+    && isCodeOnly(node, monospaceClasses);
+}
+
+function isBlankParagraph(node: HtmlNode): node is HtmlElement {
+  return isElement(node) && node.tagName === 'p' && !getText(node).trim();
+}
+
+function isWhitespaceText(node: HtmlNode): boolean {
+  return node.nodeName === '#text' && (!('value' in node) || /^\s*$/.test(node.value));
+}
+
+function isCodeOnly(node: HtmlNode, monospaceClasses: ReadonlySet<string>): boolean {
+  if (node.nodeName === '#text') return !('value' in node) || /^\s*$/.test(node.value);
+  if (!isElement(node)) return false;
+  if (node.tagName === 'pre' || node.tagName === 'code') return true;
+  if (node.tagName === 'span') {
+    return (getAttribute(node, 'class') ?? '').split(/\s+/).some((className) => monospaceClasses.has(className));
+  }
+  return node.childNodes.length > 0 && node.childNodes.every((child) => isCodeOnly(child, monospaceClasses));
+}
+
+function getCodeText(node: HtmlNode): string {
+  if (node.nodeName === '#text') return 'value' in node ? node.value : '';
+  if (!isElement(node)) return '';
+  if (node.tagName === 'br') return '\n';
+  return node.childNodes.map((child) => {
+    const text = getCodeText(child);
+    return child.nodeName === '#text' && /^\s*$/.test(text) && /[\r\n]/.test(text) ? '' : text;
+  }).join('');
+}
+
+function getMonospaceClasses(document: HtmlNode): Set<string> {
+  const classes = new Set<string>();
+  const styles: HtmlElement[] = [];
+  collectElements(document, 'style', styles);
+  for (const style of styles) {
+    const css = getText(style);
+    for (const [, className, declarations] of css.matchAll(/\.([a-zA-Z_][\w-]*)\s*\{([^}]*)\}/g)) {
+      if (/font-family\s*:[^;}]*\b(?:monospace|courier|consolas|roboto\s*mono)\b/i.test(declarations)) {
+        classes.add(className);
+      }
+    }
+  }
+  return classes;
+}
+
+function collectElements(node: HtmlNode, tagName: string, matches: HtmlElement[]): void {
+  if (isElement(node) && node.tagName === tagName) matches.push(node);
+  for (const child of getChildNodes(node)) collectElements(child, tagName, matches);
+}
+
+function normalizeCodeText(code: string): string {
+  return code.replace(/\r?\n[ \t]*/g, ' ').replace(/\u00a0/g, ' ').replace(/[ \t]+$/, '');
+}
+
+const sourceCodeKeywords = new Set([
+  'abstract', 'as', 'boolean', 'break', 'byte', 'by', 'case', 'catch', 'char', 'class', 'companion',
+  'const', 'continue', 'data', 'default', 'do', 'double', 'else', 'enum', 'extends', 'false', 'final',
+  'finally', 'float', 'for', 'fun', 'if', 'implements', 'import', 'in', 'inline', 'instanceof', 'int',
+  'interface', 'internal', 'is', 'lateinit', 'long', 'new', 'null', 'object', 'open', 'override',
+  'package', 'private', 'protected', 'public', 'return', 'sealed', 'short', 'static', 'super', 'suspend',
+  'switch', 'synchronized', 'this', 'throw', 'throws', 'true', 'try', 'val', 'var', 'void', 'volatile',
+  'when', 'while',
+]);
+
+function highlightSourceCode(code: string): string {
+  const tokens = code.split(/(\s+|\/\/.*|\/\*[\s\S]*?\*\/|"(?:\\.|[^"])*"|'(?:\\.|[^'])*'|\b\d+(?:\.\d+)?\b|[{}()[\].,:;<>!=+\-*/%&|?]+)/g);
+
+  return tokens.map((token, index) => {
+    if (!token) return '';
+    if (/^\s+$/.test(token)) return escapeHtml(token);
+
+    let tokenClass = '';
+    if (token.startsWith('//') || token.startsWith('/*')) tokenClass = 'answer-code-comment';
+    else if (/^"(?:\\.|[^"])*"$/.test(token) || /^'(?:\\.|[^'])*'$/.test(token)) tokenClass = 'answer-code-string';
+    else if (/^\d+(?:\.\d+)?$/.test(token)) tokenClass = 'answer-code-number';
+    else if (sourceCodeKeywords.has(token)) tokenClass = 'answer-code-keyword';
+    else if (/^[A-Z][A-Za-z0-9_]*$/.test(token)) tokenClass = 'answer-code-type';
+    else if (/[{}()[\].,:;<>!=+\-*/%&|?]/.test(token)) tokenClass = 'answer-code-operator';
+    else if (/^[A-Za-z_$][\w$]*$/.test(token)) {
+      const nextToken = tokens.slice(index + 1).find((candidate) => !/^\s*$/.test(candidate));
+      tokenClass = nextToken === '(' || /^[a-z][A-Za-z0-9]*[A-Z]/.test(token)
+        ? 'answer-code-function'
+        : 'answer-code-identifier';
+    }
+
+    return tokenClass
+      ? `<span class="${tokenClass}">${escapeHtml(token)}</span>`
+      : escapeHtml(token);
+  }).join('');
 }
 
 function getImageCrop(node: HtmlElement): {

@@ -16,8 +16,9 @@ import { getJobApplicationProgress, getLocalDateKey, loadJobApplicationStore, sa
 const CompleteRevision = lazy(() => import('./components/CompleteRevision'));
 const SampleInterview = lazy(() => import('./components/SampleInterview'));
 const AndroidConceptPrep = lazy(() => import('./components/AndroidConceptPrep'));
+const AndroidQuickReview = lazy(() => import('./components/AndroidQuickReview'));
 
-type View = 'dashboard' | 'questions' | 'practice' | 'keywords' | 'reference' | 'analytics' | 'interviews' | 'complete-revision' | 'sample-interview' | 'android-concepts' | 'settings';
+type View = 'dashboard' | 'questions' | 'practice' | 'keywords' | 'reference' | 'analytics' | 'interviews' | 'complete-revision' | 'sample-interview' | 'android-concepts' | 'android-quick-review' | 'settings';
 type AppLanguage = 'kotlin' | 'java';
 type TrainingMode = 'learning' | 'practice';
 type ProgressStatus = 'not_started' | 'learning' | 'practicing' | 'strong' | 'mastered';
@@ -44,6 +45,7 @@ const viewByTab: Record<string, View> = {
   'complete-revision': 'complete-revision',
   'sample-interview': 'sample-interview',
   'android-concepts': 'android-concepts',
+  'android-quick-review': 'android-quick-review',
   settings: 'settings',
 };
 
@@ -58,6 +60,7 @@ const tabByView: Record<View, string> = {
   'complete-revision': 'complete-revision',
   'sample-interview': 'sample-interview',
   'android-concepts': 'android-concepts',
+  'android-quick-review': 'android-quick-review',
   settings: 'settings',
 };
 
@@ -750,6 +753,7 @@ export default function App() {
                 ['interviews', 'Revision checklist'],
                 ['complete-revision', 'Complete revision'],
                 ['android-concepts', 'Android concepts'],
+                ['android-quick-review', 'Android quick review'],
                 ['sample-interview', 'Sample interview'],
               ],
             },
@@ -800,6 +804,7 @@ export default function App() {
               {view === 'interviews' && 'Revision checklist'}
               {view === 'complete-revision' && 'Complete revision'}
               {view === 'android-concepts' && 'Android concepts'}
+              {view === 'android-quick-review' && 'Android quick review'}
               {view === 'sample-interview' && 'Sample interview'}
               {view === 'settings' && 'Settings'}
             </h1>
@@ -1485,6 +1490,11 @@ export default function App() {
               : view === 'sample-interview'
                 ? <SampleInterview />
                 : <AndroidConceptPrep />}
+          </Suspense>
+        )}
+        {view === 'android-quick-review' && (
+          <Suspense fallback={<div className="feature-loading" role="status">Loading quick review…</div>}>
+            <AndroidQuickReview />
           </Suspense>
         )}
         {pendingProgressImport && (

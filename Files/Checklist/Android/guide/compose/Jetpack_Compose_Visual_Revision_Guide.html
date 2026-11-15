@@ -1,0 +1,601 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jetpack Compose Visual Revision Guide</title>
+<style>
+:root{--ink:#172033;--muted:#5e6a7e;--line:#dce3ed;--paper:#fff;--canvas:#f3f6fb;--blue:#2458b8;--blue-bg:#eaf1ff;--teal:#087e75;--teal-bg:#e6f7f3;--amber:#986000;--amber-bg:#fff4dd;--purple:#6543a5;--purple-bg:#f2edff;--red:#a33d43;--red-bg:#fff0f0;--shadow:0 10px 30px rgba(25,45,80,.08)}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--canvas);color:var(--ink);font:15px/1.55 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Arial,sans-serif}.shell{max-width:1440px;margin:0 auto;display:grid;grid-template-columns:255px minmax(0,1fr);gap:24px;padding:24px}.sidebar{position:sticky;top:18px;align-self:start;max-height:calc(100vh - 36px);overflow:auto;background:#fff;border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:var(--shadow)}.brand{font-weight:800;font-size:15px;line-height:1.25}.brand small{display:block;color:var(--muted);font-weight:500;margin-top:5px}.search{width:100%;padding:10px 11px;border:1px solid var(--line);border-radius:9px;margin:15px 0 10px;font:inherit}.nav a{display:block;color:#35425a;text-decoration:none;padding:7px 9px;border-radius:8px;font-size:13px}.nav a:hover,.nav a.active{background:var(--blue-bg);color:var(--blue)}.nav .navsub{padding-left:19px;font-size:12px;color:var(--muted)}.content{min-width:0}.topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:0 0 14px}.topbar p{margin:0;color:var(--muted);font-size:13px}.printbtn{border:0;background:var(--blue);color:#fff;padding:10px 14px;border-radius:9px;font-weight:700;cursor:pointer}.master,.chapter,.closing{background:var(--paper);border:1px solid var(--line);border-radius:18px;padding:28px;margin-bottom:20px;box-shadow:var(--shadow)}.eyebrow{color:var(--blue);font-size:11px;letter-spacing:.12em;text-transform:uppercase;font-weight:800}.master h1{font-size:30px;line-height:1.08;margin:8px 0 7px;letter-spacing:-.03em}.subtitle{font-size:14px;color:var(--muted);margin:0 0 20px}.section-title{display:flex;align-items:flex-start;gap:12px;margin:0 0 16px}.num{flex:0 0 32px;height:32px;border-radius:10px;background:var(--blue-bg);color:var(--blue);display:grid;place-items:center;font-weight:800}.section-title h2{font-size:23px;line-height:1.2;margin:2px 0 3px;letter-spacing:-.02em}.section-title p{margin:0;color:var(--muted);font-size:13px}.chapter h3{font-size:16px;margin:20px 0 9px}.chapter h4{font-size:13px;margin:0 0 5px}.chapter p{margin:6px 0}.chapter ul,.chapter ol{margin:7px 0 10px;padding-left:21px}.chapter li{margin:4px 0}.grid2,.grid3,.grid4{display:grid;gap:12px;margin:12px 0}.grid2{grid-template-columns:repeat(2,minmax(0,1fr))}.grid3{grid-template-columns:repeat(3,minmax(0,1fr))}.grid4{grid-template-columns:repeat(4,minmax(0,1fr))}.card{border:1px solid var(--line);border-radius:12px;padding:13px;background:#fff;break-inside:avoid}.card p{font-size:13px;color:#46536a;margin:5px 0}.card ul{font-size:13px}.blue{background:var(--blue-bg);border-color:#d5e2ff}.teal{background:var(--teal-bg);border-color:#c8eee6}.amber{background:var(--amber-bg);border-color:#f3e2b8}.purple{background:var(--purple-bg);border-color:#e3d9ff}.red{background:var(--red-bg);border-color:#f2d1d1}.pill{display:inline-block;font-size:10px;letter-spacing:.04em;text-transform:uppercase;font-weight:800;border-radius:99px;padding:3px 7px;background:#eef1f6;color:#48556c;margin-bottom:5px}.flow{display:flex;align-items:stretch;justify-content:center;gap:8px;flex-wrap:wrap;margin:12px 0}.node{border:1.5px solid #cbd7e8;background:#f8faff;border-radius:11px;padding:10px 12px;min-width:115px;text-align:center;flex:1}.node strong{display:block;font-size:13px}.node span{font-size:11px;color:var(--muted);display:block;margin-top:3px}.arrow{align-self:center;color:var(--blue);font-size:22px;font-weight:800}.down{text-align:center;color:var(--blue);font-weight:800;margin:4px}.flowcol{display:flex;flex-direction:column;align-items:center;gap:5px}.branch{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;width:100%}.branch .node{min-width:0}.callout{border-left:4px solid var(--blue);padding:10px 13px;background:#f3f7ff;border-radius:0 9px 9px 0;margin:12px 0;font-size:13px}.callout.warn{border-color:var(--amber);background:#fff8e9}.callout.good{border-color:var(--teal);background:#effaf7}.callout.danger{border-color:var(--red);background:#fff4f4}table{width:100%;border-collapse:collapse;margin:10px 0;font-size:12.5px;break-inside:auto}th{background:#edf2f9;text-align:left;color:#263650;font-size:11px;text-transform:uppercase;letter-spacing:.04em}th,td{padding:8px 9px;border:1px solid var(--line);vertical-align:top}tr{break-inside:avoid}td strong{color:#1d3154}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#111b2b;color:#eaf0f8;padding:13px;border-radius:11px;font:11.5px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace;margin:9px 0 14px;break-inside:avoid}code{font: .92em ui-monospace,SFMono-Regular,Consolas,monospace;background:#eef2f8;padding:1px 4px;border-radius:4px;color:#243d66}.code-label{color:var(--muted);font-size:11px;font-weight:700;margin:10px 0 3px}.mini{font-size:11.5px;color:var(--muted)}.tagrow{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}.tag{font-size:11px;padding:5px 8px;border-radius:7px;background:#f0f3f8;color:#3d4b62}.two-paths{display:grid;grid-template-columns:1fr 1fr;gap:10px}.branchcard{border:1px dashed #bac8dc;border-radius:10px;padding:11px}.branchcard strong{display:block}.checklist{columns:2;column-gap:26px}.checklist div{break-inside:avoid;margin:5px 0}.footer{font-size:11px;color:var(--muted);border-top:1px solid var(--line);margin-top:18px;padding-top:10px}.source-list a{overflow-wrap:anywhere;color:var(--blue)}.hidden{display:none!important}.master-grid{display:grid;grid-template-columns:1.25fr 1fr 1fr;gap:12px}.master-panel{border:1px solid var(--line);border-radius:13px;padding:10px;background:#fff;min-width:0}.master-panel h3{font-size:13px;margin:0 0 8px}.master-panel .node{padding:7px 6px;min-width:0}.master-panel .node strong{font-size:11px}.master-panel .node span{font-size:9px}.master-panel .flow{gap:5px;margin:5px 0}.master-panel .arrow{font-size:16px}.master-note{font-size:11px;color:var(--muted);margin-top:8px}.master .chapter-label{font-size:11px;color:var(--muted);margin-top:9px}.master-bottom{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px}.master-bottom .card{padding:8px}.master-bottom .card p{font-size:10px;margin:2px 0}.master-bottom .card h4{font-size:11px}.chapter{scroll-margin-top:20px}.chapter:target{outline:2px solid #b9ceff}.quicklist{display:grid;grid-template-columns:1fr 1fr;gap:8px}.quicklist .card{padding:10px}.quicklist p{font-size:12px}.kicker{font-size:10px;text-transform:uppercase;letter-spacing:.08em;font-weight:800;color:var(--muted)}
+@media(max-width:1000px){.shell{grid-template-columns:1fr;padding:12px}.sidebar{position:static;max-height:none}.nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.master-grid{grid-template-columns:1fr 1fr}.master-bottom{grid-template-columns:1fr 1fr}.grid4{grid-template-columns:1fr 1fr}}
+@media(max-width:650px){.grid2,.grid3,.grid4,.master-grid,.master-bottom,.branch,.two-paths,.quicklist{grid-template-columns:1fr}.master h1{font-size:25px}.master,.chapter,.closing{padding:18px}.section-title h2{font-size:20px}.nav{grid-template-columns:1fr 1fr}}
+@media print{
+ @page{size:A4;margin:11mm;@bottom-right{content:"Compose Revision · " counter(page);font-size:8pt;color:#6a7485}}
+ @page:first{size:A4 landscape;margin:9mm;@bottom-right{content:"Compose Revision · " counter(page);font-size:8pt;color:#6a7485}}
+ body{background:#fff;font-size:9.4pt;color:#142033}.shell{display:block;max-width:none;padding:0;margin:0}.sidebar,.topbar{display:none!important}.master,.chapter,.closing{box-shadow:none;border:0;border-radius:0;margin:0;padding:0 0 6mm}.master{break-after:page;min-height:0}.chapter{break-before:auto}.chapter + .chapter{break-before:page}.card,.master-panel{box-shadow:none}.chapter h2{font-size:20pt}.chapter h3{font-size:12pt}.chapter p,.chapter li{font-size:9pt}.grid2,.grid3,.grid4{gap:7px}.card{padding:8px}.flow{gap:5px}.node{padding:7px;min-width:0}.node strong{font-size:10pt}.node span{font-size:8pt}table{font-size:8pt}th,td{padding:5px 6px}pre{font-size:8pt;padding:8px}.footer{font-size:8pt}.master h1{font-size:24pt}.master .subtitle{margin-bottom:10px}.master-panel{padding:8px}.master-bottom .card p{font-size:8.2pt}.master-panel .node span{font-size:7pt}.master-panel .node strong{font-size:8.5pt}.master-grid{gap:8px}.master-bottom{gap:8px}.eyebrow{font-size:8pt}a{color:inherit;text-decoration:none}
+}
+</style>
+</head>
+<body>
+<div class="shell">
+<aside class="sidebar">
+ <div class="brand">JETPACK COMPOSE<br>VISUAL REVISION GUIDE<small>Quick recall • decisions • code patterns</small></div>
+ <input class="search" id="searchBox" type="search" placeholder="Find a concept..." aria-label="Search guide">
+ <nav class="nav" id="guideNav">
+  <a href="#master">01 · Master map</a>
+  <a href="#mental-model">02 · Mental model</a>
+  <a href="#state">03 · State & lifetime</a>
+  <a href="#effects">04 · Side effects</a>
+  <a href="#layout">05 · Layout & lists</a>
+  <a href="#architecture">06 · Architecture & Flow</a>
+  <a href="#navigation">07 · Navigation & UI</a>
+  <a href="#animation">08 · Animation & input</a>
+  <a href="#performance">09 · Performance</a>
+  <a href="#quality">10 · Testing & accessibility</a>
+  <a href="#patterns">11 · Essential patterns</a>
+  <a href="#rapid">12 · Interview rapid recall</a>
+  <a href="#references">13 · Official references</a>
+ </nav>
+ <p class="mini">Use the search box to filter matching cards. The print button exports the full guide.</p>
+</aside>
+<main class="content" id="guideContent">
+<div class="topbar"><p>Android developer interview refresher · Updated 31 Oct 2026</p><button class="printbtn" onclick="window.print()">Print / Save PDF</button></div>
+
+<section class="master" id="master" data-search="master map compose pipeline state event viewmodel flow ui composition layout draw effects lifetime performance architecture">
+ <div class="eyebrow">The whole topic in one view</div>
+ <h1>Jetpack Compose — Master Revision Map</h1>
+ <p class="subtitle">Start here. Follow the arrows from state to UI, then use the decision cards to choose the right API.</p>
+ <div class="master-grid">
+  <div class="master-panel">
+   <h3>01 / The Compose rendering loop</h3>
+   <div class="flowcol">
+    <div class="node blue"><strong>State + Inputs</strong><span>values, parameters, events</span></div><div class="down">↓</div>
+    <div class="node"><strong>Composition</strong><span>build / update UI tree</span></div><div class="down">↓</div>
+    <div class="node"><strong>Layout</strong><span>measure → place</span></div><div class="down">↓</div>
+    <div class="node teal"><strong>Draw</strong><span>render pixels</span></div>
+   </div>
+   <div class="callout good" style="margin-bottom:0">Observed state changes → invalidation → affected work runs again. Recomposition is not automatically a full-screen redraw.</div>
+  </div>
+  <div class="master-panel">
+   <h3>02 / State ownership decision</h3>
+   <div class="flowcol">
+    <div class="node"><strong>Only this composition?</strong><span>temporary local UI state</span></div><div class="down">↓</div>
+    <div class="branch">
+     <div class="node blue"><strong>remember</strong><span>survive recomposition</span></div>
+     <div class="node teal"><strong>rememberSaveable</strong><span>restore small UI state</span></div>
+     <div class="node purple"><strong>ViewModel</strong><span>screen state / business logic</span></div>
+    </div>
+    <div class="node amber"><strong>Must survive app restarts?</strong><span>DataStore / Room / backend</span></div>
+   </div>
+   <div class="master-note">ViewModel survives configuration changes; use SavedStateHandle for small restore state after system process recreation.</div>
+  </div>
+  <div class="master-panel">
+   <h3>03 / Unidirectional data flow</h3>
+   <div class="flowcol">
+    <div class="node"><strong>User action → event</strong><span>click / input · callback to owner</span></div><div class="down">↓</div>
+    <div class="node purple"><strong>ViewModel + repository</strong><span>handle event · load / update data</span></div><div class="down">↓</div>
+    <div class="node teal"><strong>StateFlow&lt;UiState&gt;</strong><span>current screen state</span></div><div class="down">↓</div>
+    <div class="node blue"><strong>collectAsStateWithLifecycle → UI</strong><span>observe and render latest state</span></div>
+   </div>
+  </div>
+ </div>
+ <div class="master-bottom">
+  <div class="card blue"><h4>04 / Effects</h4><p><b>LaunchedEffect</b> = coroutine tied to composition + keys</p><p><b>DisposableEffect</b> = setup / cleanup</p><p><b>rememberCoroutineScope</b> = launch from UI event</p><p><b>SideEffect</b> = publish after successful recomposition</p></div>
+  <div class="card teal"><h4>05 / Layout</h4><p><b>Row</b> horizontal · <b>Column</b> vertical · <b>Box</b> overlay</p><p><b>Lazy*</b> for long / virtualized lists</p><p><b>Modifier order matters</b> for constraints, drawing and input</p><p><b>Scaffold</b> provides app structure + insets padding</p></div>
+  <div class="card purple"><h4>06 / Performance</h4><p>Keep composables cheap and side-effect free.</p><p>Use stable item keys; contentType for mixed lists.</p><p>Read state as late as practical; measure before optimizing.</p><p>Strong skipping is default with Kotlin 2.0.20+.</p></div>
+ </div>
+</section>
+
+<section class="chapter" id="mental-model" data-search="fundamentals composable declarative composition recomposition layout draw phases snapshot side effect compositionlocal">
+ <div class="section-title"><div class="num">02</div><div><h2>The mental model: how Compose works</h2><p>Think declaratively: UI is a description of the current state, not a sequence of view mutations.</p></div></div>
+ <div class="flow">
+  <div class="node blue"><strong>Inputs</strong><span>state + parameters</span></div><div class="arrow">→</div>
+  <div class="node"><strong>Composition</strong><span>what UI exists?</span></div><div class="arrow">→</div>
+  <div class="node"><strong>Layout</strong><span>where / how big?</span></div><div class="arrow">→</div>
+  <div class="node teal"><strong>Drawing</strong><span>what pixels?</span></div>
+ </div>
+ <div class="grid3">
+  <div class="card blue"><span class="pill">Composition</span><h4>Build the UI tree</h4><p>Compose functions run and describe which UI nodes should exist for the current inputs.</p></div>
+  <div class="card teal"><span class="pill">Layout</span><h4>Measure and place</h4><p>Parents pass constraints down. Children report sizes; parents place them.</p></div>
+  <div class="card purple"><span class="pill">Drawing</span><h4>Render content</h4><p>Text, shapes, images and modifiers draw the visible result.</p></div>
+ </div>
+ <h3>Composition vs recomposition</h3>
+ <table><tr><th>Term</th><th>Recall it as</th></tr>
+ <tr><td><b>Composition</b></td><td>Initial execution that enters composables into the Composition and creates the UI description.</td></tr>
+ <tr><td><b>Recomposition</b></td><td>Re-execution of affected composable scopes when observed state or inputs change.</td></tr>
+ <tr><td><b>Skipping</b></td><td>Compose can skip eligible composables when inputs compare unchanged.</td></tr>
+ <tr><td><b>Remembering</b></td><td>Retain a value in the Composition across recompositions at that call site.</td></tr></table>
+ <div class="callout warn"><b>Interview trap:</b> Do not say “every state update redraws the whole screen.” State reads determine what is invalidated; Compose may recompose only affected scopes and may skip unchanged work. Composition, layout and drawing are distinct phases.</div>
+ <h3>Why composables should be side-effect free</h3>
+ <p>Recomposition can happen more often than expected, in a different order, or be discarded. A composable should describe UI from inputs. Do not directly make network calls, write databases, register listeners, or mutate external state from the composable body.</p>
+ <div class="grid2">
+  <div class="card teal"><h4>Good inside composition</h4><p>Read state, calculate lightweight values, build UI, pass callbacks, create remembered objects.</p></div>
+  <div class="card red"><h4>Move out of composition</h4><p>Network requests, analytics events, subscriptions, imperative SDK updates, file or database writes.</p></div>
+ </div>
+ <h3>Snapshot state</h3>
+ <p><code>mutableStateOf()</code> creates observable Compose state. When a composable reads its value, Compose tracks that read. Writing a different value invalidates readers. Plain mutable variables and ordinary mutable collections are not automatically observable by Compose.</p>
+ <pre>var count by remember { mutableIntStateOf(0) }
+
+Button(onClick = { count++ }) {
+    Text("Count: $count")
+}</pre>
+ <p class="mini">Use <code>State&lt;T&gt;</code> when exposing read-only state; use <code>MutableState&lt;T&gt;</code> where a caller is allowed to change it. Delegated syntax (<code>by</code>) is shorthand for reading / writing <code>.value</code>.</p>
+ <h3>Other foundational concepts</h3>
+ <div class="grid2">
+  <div class="card"><h4>CompositionLocal</h4><p>Implicitly provides values down a Composition subtree, such as theme, density or layout direction. Use for cross-cutting tree-wide values, not as a replacement for explicit screen state or all parameters.</p></div>
+  <div class="card"><h4>key()</h4><p>Gives a composition group stable identity when the order or identity of repeated content changes. For lazy lists, prefer the list's <code>key</code> parameter.</p></div>
+  <div class="card"><h4>remember</h4><p>Retains a calculation result while the call site remains in the Composition. Keys invalidate and recalculate the remembered value.</p></div>
+  <div class="card"><h4>Stateless composable</h4><p>Receives current values and callbacks as parameters. It does not own the source of truth for those values.</p></div>
+ </div>
+</section>
+
+<section class="chapter" id="state" data-search="state remember rememberSaveable viewmodel savedstatehandle datastore room state hoisting stateful stateless derivedStateOf rememberUpdatedState mutableStateOf snapshot list">
+ <div class="section-title"><div class="num">03</div><div><h2>State management & state lifetime</h2><p>The most important decision: who owns the state, and how long must it live?</p></div></div>
+ <h3>Choose the right state holder</h3>
+ <div class="flowcol">
+  <div class="node blue"><strong>Where does this value belong?</strong><span>Start from ownership + required lifetime</span></div><div class="down">↓</div>
+  <div class="branch">
+   <div class="card blue"><h4>Local UI detail</h4><p>Selected tab, expanded row, temporary field state.</p><b>remember</b></div>
+   <div class="card teal"><h4>Restorable UI detail</h4><p>Text query, scroll position, selected item ID.</p><b>rememberSaveable</b></div>
+   <div class="card purple"><h4>Screen / business state</h4><p>Loading, content, errors, validation, screen logic.</p><b>ViewModel + StateFlow</b></div>
+  </div>
+  <div class="down">↓</div>
+  <div class="node amber"><strong>Must remain after app/process restart?</strong><span>Persist the source of truth in DataStore / Room / backend</span></div>
+ </div>
+ <table>
+  <tr><th>API / owner</th><th>Survives</th><th>Use it for</th><th>Does NOT mean</th></tr>
+  <tr><td><b>remember</b></td><td>Recomposition at same call site</td><td>Ephemeral local UI state; cached object tied to Composition.</td><td>It does not survive leaving Composition or Activity recreation by itself.</td></tr>
+  <tr><td><b>rememberSaveable</b></td><td>Recomposition + saved-instance-state restoration (such as Activity recreation / system process recreation)</td><td>Small restorable UI values: text, selected ID, simple UI flags.</td><td>Not durable storage. Avoid large objects; use a Saver or save a key/ID.</td></tr>
+  <tr><td><b>ViewModel</b></td><td>Configuration changes while its owner remains alive</td><td>Screen-level UI state, business logic, coordinating repositories.</td><td>Not a disk cache; a ViewModel alone is not restored after process death.</td></tr>
+  <tr><td><b>SavedStateHandle</b></td><td>Small saved state restored after system process recreation</td><td>Restorable ViewModel inputs / IDs / small values.</td><td>Not a replacement for persistent data storage.</td></tr>
+  <tr><td><b>DataStore / Room</b></td><td>App restarts, process death, device reboot</td><td>Preferences and durable local data.</td><td>Not the right place for every temporary UI detail.</td></tr>
+ </table>
+ <div class="callout warn"><b>Remember:</b> Rotation is a configuration change. A ViewModel survives it; <code>remember</code> alone does not. System process recreation can restore saved state, but a ViewModel object is recreated. Force-stop / user-cleared data is different from saved-instance-state restoration.</div>
+ <h3>remember vs rememberSaveable — tiny examples</h3>
+ <div class="grid2">
+  <div class="card blue"><h4>remember</h4><pre>var expanded by remember {
+    mutableStateOf(false)
+}</pre><p>Value is retained while the composable remains in the Composition.</p></div>
+  <div class="card teal"><h4>rememberSaveable</h4><pre>var query by rememberSaveable {
+    mutableStateOf("")
+}</pre><p>Suitable for small UI state that should be restored after Activity / system recreation.</p></div>
+ </div>
+ <h3>State hoisting</h3>
+ <div class="flow">
+  <div class="node blue"><strong>Parent owns state</strong><span>single source of truth</span></div><div class="arrow">→</div>
+  <div class="node"><strong>Pass value down</strong><span>state ↓</span></div><div class="arrow">→</div>
+  <div class="node teal"><strong>Child emits event</strong><span>callback ↑</span></div><div class="arrow">→</div>
+  <div class="node purple"><strong>Parent updates</strong><span>new state</span></div>
+ </div>
+ <p><b>Why?</b> Reuse, testability, a single source of truth, coordination between siblings, and separation of UI rendering from state ownership. A component is commonly exposed as <code>value + onValueChange</code> or <code>uiState + onEvent</code>.</p>
+ <pre>@Composable
+fun NameField(value: String, onValueChange: (String) -> Unit) {
+    TextField(value = value, onValueChange = onValueChange)
+}
+
+@Composable
+fun ProfileForm() {
+    var name by rememberSaveable { mutableStateOf("") }
+    NameField(value = name, onValueChange = { name = it })
+}</pre>
+ <div class="callout good"><b>Memory phrase:</b> State down, events up. Hoist state to the lowest common ancestor that needs to read or change it—not automatically to the top of the app.</div>
+ <h3>State helpers: do not confuse these</h3>
+ <table><tr><th>API</th><th>What it does</th><th>Use when</th></tr>
+  <tr><td><b>remember(key)</b></td><td>Cache a value until a key changes or the call site leaves Composition.</td><td>Re-use an object / calculation across recompositions.</td></tr>
+  <tr><td><b>derivedStateOf</b></td><td>Creates observable derived state; downstream updates only when the derived result changes.</td><td>Inputs change more frequently than the UI needs to react (e.g. scroll index threshold).</td></tr>
+  <tr><td><b>rememberUpdatedState</b></td><td>Provides the latest value to a long-lived effect without restarting that effect.</td><td>Callback / parameter can change while a listener or effect must keep running.</td></tr>
+  <tr><td><b>mutableStateListOf</b></td><td>Observable snapshot-aware list.</td><td>In-place list operations must notify Compose.</td></tr>
+  <tr><td><b>mutableStateMapOf</b></td><td>Observable snapshot-aware map.</td><td>In-place map changes must notify Compose.</td></tr>
+ </table>
+ <div class="callout good"><b>Two quick distinctions:</b> <code>remember</code> caches by keys; <code>derivedStateOf</code> derives observable state and can suppress downstream updates when the derived result is unchanged. An ordinary <code>MutableList</code> is not observable; use immutable replacement via state or a snapshot-aware collection.</div>
+</section>
+
+<section class="chapter" id="effects" data-search="side effect launchedEffect disposableEffect SideEffect rememberCoroutineScope produceState derivedStateOf snapshotFlow rememberUpdatedState LaunchedEffect keys">
+ <div class="section-title"><div class="num">04</div><div><h2>Side effects: choose the right API</h2><p>Effects run work outside pure UI description. Pick by trigger and cleanup requirement.</p></div></div>
+ <div class="flowcol">
+  <div class="node blue"><strong>What is the trigger?</strong></div><div class="down">↓</div>
+  <div class="branch">
+   <div class="card blue"><h4>Composition enters / keys change</h4><p>Need a coroutine?</p><b>LaunchedEffect(keys)</b></div>
+   <div class="card teal"><h4>Setup + cleanup resource</h4><p>Register listener / observer?</p><b>DisposableEffect(keys)</b></div>
+   <div class="card purple"><h4>UI callback / click</h4><p>Launch a coroutine from an event?</p><b>rememberCoroutineScope()</b></div>
+  </div>
+  <div class="branch">
+   <div class="card"><h4>After successful recomposition</h4><p>Publish Compose state externally.</p><b>SideEffect</b></div>
+   <div class="card"><h4>External async source → State</h4><p>Adapt subscription / callback.</p><b>produceState</b></div>
+   <div class="card"><h4>Compose state → Flow</h4><p>Observe state changes in a coroutine.</p><b>snapshotFlow</b></div>
+  </div>
+ </div>
+ <table><tr><th>API</th><th>Lifecycle / trigger</th><th>Typical use</th><th>Recall sentence</th></tr>
+  <tr><td><b>LaunchedEffect(key)</b></td><td>Starts when it enters Composition; cancels and relaunches when key changes; cancels when it leaves.</td><td>Composition-scoped suspend work, animation, snackbar, UI-bound collection.</td><td>Coroutine tied to Composition and keys.</td></tr>
+  <tr><td><b>rememberCoroutineScope()</b></td><td>Returns a scope tied to that call site; cancelled when it leaves Composition.</td><td>Launch from click / callback, e.g. show Snackbar or animate scroll.</td><td>Coroutine started by an event.</td></tr>
+  <tr><td><b>DisposableEffect(key)</b></td><td>Runs setup when entering / keys change; <code>onDispose</code> cleans up.</td><td>Register / unregister listener, observer, receiver.</td><td>Effect with mandatory cleanup.</td></tr>
+  <tr><td><b>SideEffect</b></td><td>Runs after every successful recomposition.</td><td>Publish the latest Compose state to a non-Compose object.</td><td>Synchronize after composition.</td></tr>
+  <tr><td><b>produceState</b></td><td>Producer scoped to Composition; cancelled when it leaves.</td><td>Convert callback / external observable into Compose <code>State</code>.</td><td>External source → Compose State.</td></tr>
+  <tr><td><b>derivedStateOf</b></td><td>Derived value is observable; downstream update only when result changes.</td><td>Rate-limit UI reactions to frequently changing state.</td><td>State → derived State.</td></tr>
+  <tr><td><b>snapshotFlow</b></td><td>Inside a coroutine; emits when read Compose state changes, with equality-based deduplication.</td><td>Use scroll / snapshot state with Flow operators.</td><td>Compose State → Flow.</td></tr>
+  <tr><td><b>rememberUpdatedState</b></td><td>Latest value updates while the holder remains remembered.</td><td>Use latest callback inside a long-running effect without restarting it.</td><td>Fresh value, same effect.</td></tr>
+ </table>
+ <h3>Code patterns</h3>
+ <div class="code-label">LaunchedEffect: key controls restart</div>
+ <pre>LaunchedEffect(userId) {
+    // Cancelled and restarted when userId changes.
+    viewModel.loadUser(userId)
+}</pre>
+ <div class="code-label">rememberCoroutineScope: launch from event</div>
+ <pre>val scope = rememberCoroutineScope()
+val snackbarHostState = remember { SnackbarHostState() }
+
+Button(onClick = {
+    scope.launch { snackbarHostState.showSnackbar("Saved") }
+}) { Text("Save") }</pre>
+ <div class="code-label">DisposableEffect: always clean up</div>
+ <pre>DisposableEffect(lifecycleOwner) {
+    val observer = LifecycleEventObserver { _, event ->
+        if (event == Lifecycle.Event.ON_START) { /* ... */ }
+    }
+    lifecycleOwner.lifecycle.addObserver(observer)
+    onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+}</pre>
+ <div class="callout warn"><b>Common trap:</b> <code>LaunchedEffect(Unit)</code> means “once for this composition entry / stable key,” not “once for the entire process.” Do not put changing values in the key unless the effect should restart.</div>
+</section>
+
+<section class="chapter" id="layout" data-search="layout Row Column Box BoxWithConstraints Scaffold Modifier modifier order padding clickable LazyColumn LazyRow LazyGrid keys contentType constraints custom Layout">
+ <div class="section-title"><div class="num">05</div><div><h2>Layouts, Modifiers & lazy lists</h2><p>Know which container to choose, how constraints work, and why modifier order matters.</p></div></div>
+ <h3>Choose a layout</h3>
+ <div class="grid4">
+  <div class="card blue"><h4>Row</h4><p>Place children horizontally. Use <code>horizontalArrangement</code>, <code>verticalAlignment</code>, and scoped <code>weight()</code>.</p></div>
+  <div class="card teal"><h4>Column</h4><p>Place children vertically. Use <code>verticalArrangement</code>, <code>horizontalAlignment</code>, and scoped <code>weight()</code>.</p></div>
+  <div class="card purple"><h4>Box</h4><p>Stack / overlay children. Use <code>contentAlignment</code> or per-child <code>align()</code>.</p></div>
+  <div class="card amber"><h4>BoxWithConstraints</h4><p>Read incoming max / min constraints and adapt child layout to available space.</p></div>
+ </div>
+ <div class="grid2">
+  <div class="card"><h4>Scaffold</h4><p>App screen structure: top bar, bottom bar, FAB, snackbar host and content. Apply the provided <code>innerPadding</code> to content to avoid overlap.</p></div>
+  <div class="card"><h4>Custom Layout</h4><p>Use <code>Layout</code> when standard Row / Column / Box cannot express the measurement and placement algorithm. Measure children and place them.</p></div>
+ </div>
+ <h3>Constraint mental model</h3>
+ <div class="flow"><div class="node"><strong>Parent</strong><span>passes min / max constraints ↓</span></div><div class="arrow">→</div><div class="node blue"><strong>Child measures</strong><span>chooses size within bounds</span></div><div class="arrow">→</div><div class="node teal"><strong>Parent places</strong><span>chooses coordinates</span></div></div>
+ <p class="mini">A composable is measured under constraints from its parent. Modifiers can change constraints, measurement, placement, drawing, semantics and input.</p>
+ <h3>Modifier chain order changes behavior</h3>
+ <div class="grid2">
+  <div class="card blue"><h4>Clickable wraps padding</h4><pre>Modifier
+    .clickable { onClick() }
+    .padding(16.dp)</pre><p>The clickable area includes the padded region because clickable is outside padding in the chain.</p></div>
+  <div class="card amber"><h4>Padding wraps clickable</h4><pre>Modifier
+    .padding(16.dp)
+    .clickable { onClick() }</pre><p>The outer padding is outside the clickable region; taps in that padding do not trigger the inner clickable.</p></div>
+ </div>
+ <div class="callout good"><b>API habit:</b> Expose <code>modifier: Modifier = Modifier</code> on reusable composables and apply it to the root / first emitted UI element. Modifier is immutable; chaining returns a new chain.</div>
+ <h3>Which list container?</h3>
+ <table><tr><th>Container</th><th>Use when</th><th>Remember</th></tr>
+  <tr><td><b>Column / Row</b></td><td>Small, bounded set of children.</td><td>All children are composed; use <code>verticalScroll</code> / <code>horizontalScroll</code> if needed.</td></tr>
+  <tr><td><b>LazyColumn / LazyRow</b></td><td>Long or potentially large scrolling collections.</td><td>Only visible / needed items are composed; use <code>item</code> / <code>items</code>.</td></tr>
+  <tr><td><b>LazyVerticalGrid</b></td><td>Vertically scrolling grid.</td><td>Use fixed or adaptive columns; item keys still matter.</td></tr>
+ </table>
+ <pre>LazyColumn {
+    items(
+        items = messages,
+        key = { it.id },              // stable, unique, saveable ID
+        contentType = { it.kind }     // useful for heterogeneous rows
+    ) { message ->
+        MessageRow(message)
+    }
+}</pre>
+ <div class="grid2">
+  <div class="card teal"><h4>key</h4><p>Identity: tells Compose which item is which across insertions, removals and moves. Prefer a stable unique ID, not the current list index.</p></div>
+  <div class="card purple"><h4>contentType</h4><p>Structure: groups similar item layouts so lazy layouts can reuse compositions more effectively in mixed-content lists. Most useful for heterogeneous lists.</p></div>
+ </div>
+ <div class="callout warn"><b>Interview trap:</b> Lazy does not mean “free.” Avoid expensive work in item content, use stable keys, avoid repeated list scans inside item lambdas, and profile scrolling in release builds.</div>
+ <h3>Frequently used modifier families</h3>
+ <div class="tagrow"><span class="tag">size / width / height</span><span class="tag">fillMaxSize / fillMaxWidth</span><span class="tag">padding</span><span class="tag">background</span><span class="tag">border</span><span class="tag">clip</span><span class="tag">clickable</span><span class="tag">scrollable</span><span class="tag">weight (scope)</span><span class="tag">align (scope)</span><span class="tag">offset</span><span class="tag">semantics</span><span class="tag">testTag</span><span class="tag">graphicsLayer</span><span class="tag">animateContentSize</span></div>
+</section>
+
+<section class="chapter" id="architecture" data-search="architecture MVVM UI state UDF unidirectional data flow ViewModel repository use case Flow StateFlow SharedFlow collectAsStateWithLifecycle collectAsState cold hot">
+ <div class="section-title"><div class="num">06</div><div><h2>Architecture, ViewModel & Kotlin Flow</h2><p>Compose renders state. ViewModel coordinates state and events; repositories own data access.</p></div></div>
+ <h3>Unidirectional data flow (UDF)</h3>
+ <div class="flowcol">
+  <div class="node blue"><strong>Composable UI</strong><span>renders UiState</span></div><div class="down">↑ state</div>
+  <div class="node"><strong>ViewModel</strong><span>handles UI events, exposes screen state</span></div><div class="down">↓ calls</div>
+  <div class="node purple"><strong>Use case / Repository</strong><span>business rules + data access</span></div><div class="down">↓</div>
+  <div class="node amber"><strong>Remote / local data source</strong><span>API, database, DataStore</span></div>
+  <div class="down">↑ result / Flow</div><div class="node teal"><strong>StateFlow&lt;UiState&gt;</strong><span>immutable screen state</span></div><div class="down">↓ collect</div>
+  <div class="node blue"><strong>Screen recomposes</strong><span>new state becomes visible</span></div>
+ </div>
+ <p><b>UDF phrase:</b> State flows down; events flow up. Prefer immutable UI state models and explicit actions such as <code>onRetry()</code>, <code>onQueryChanged(query)</code>, or <code>onItemSelected(id)</code>.</p>
+ <h3>Flow vs StateFlow vs SharedFlow</h3>
+ <table><tr><th>Type</th><th>Cold / hot</th><th>Current value / replay</th><th>Best mental model</th></tr>
+  <tr><td><b>Flow&lt;T&gt;</b></td><td>Usually cold for standard builders; a Flow is an interface and can represent hot sources too.</td><td>No built-in current value or replay contract.</td><td>A stream description; collection runs the upstream work for cold flows.</td></tr>
+  <tr><td><b>StateFlow&lt;T&gt;</b></td><td>Hot.</td><td>Always has a current <code>value</code>; new collectors receive the latest value; conflates updates using equality.</td><td>Observable state holder, usually for screen state.</td></tr>
+  <tr><td><b>SharedFlow&lt;T&gt;</b></td><td>Hot.</td><td>Configurable replay / buffer; no required initial value.</td><td>Broadcast stream for multiple collectors; delivery depends on replay / buffer / active subscribers.</td></tr>
+ </table>
+ <div class="callout warn"><b>Subtle but important:</b> A default <code>MutableSharedFlow(replay = 0)</code> does not retain an event for a collector that was absent. Treat important outcomes that must never be lost as state, or design explicit acknowledgement / delivery semantics.</div>
+ <h3>How Compose collects a Flow</h3>
+ <div class="flow"><div class="node purple"><strong>ViewModel</strong><span>StateFlow&lt;UiState&gt;</span></div><div class="arrow">→</div><div class="node blue"><strong>collectAsStateWithLifecycle()</strong><span>lifecycle-aware State</span></div><div class="arrow">→</div><div class="node teal"><strong>Composable</strong><span>renders latest value</span></div></div>
+ <pre>@Composable
+fun ProfileRoute(viewModel: ProfileViewModel) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    ProfileScreen(
+        uiState = uiState,
+        onRetry = viewModel::retry
+    )
+}</pre>
+ <table><tr><th>API</th><th>Recall</th></tr>
+  <tr><td><b>collectAsStateWithLifecycle()</b></td><td>Recommended for Android UI; collects with Lifecycle awareness and exposes Compose State.</td></tr>
+  <tr><td><b>collectAsState()</b></td><td>Converts Flow to Compose State without Android Lifecycle-aware collection; useful in common / platform-agnostic Compose contexts.</td></tr>
+  <tr><td><b>stateIn()</b></td><td>Converts a Flow into a hot StateFlow in a supplied scope, with a chosen sharing strategy and initial value.</td></tr>
+  <tr><td><b>shareIn()</b></td><td>Shares a Flow as a hot SharedFlow in a supplied scope.</td></tr>
+  <tr><td><b>asStateFlow()</b></td><td>Expose read-only StateFlow while keeping MutableStateFlow private.</td></tr>
+ </table>
+ <h3>ViewModel responsibilities</h3>
+ <div class="grid2">
+  <div class="card teal"><h4>Good fit</h4><p>Own screen UI state, respond to events, call repositories / use cases, coordinate coroutines, transform domain data into UI models.</p></div>
+  <div class="card red"><h4>Avoid</h4><p>Holding Activity / View / composable references, storing huge UI trees, putting all data access in the UI, or using ViewModel as a permanent database.</p></div>
+ </div>
+ <div class="callout good"><b>Architecture memory:</b> Route composable connects Android lifecycle + ViewModel. Screen composable is mostly stateless and preview-friendly. Repository abstracts data sources; use cases are useful when business logic deserves a separate reusable unit, not mandatory for every function.</div>
+</section>
+
+<section class="chapter" id="navigation" data-search="navigation NavHost NavController rememberNavController route backstack deep link Material3 Scaffold theme colorScheme typography Surface TextField button dialog bottomsheet dp sp resources insets">
+ <div class="section-title"><div class="num">07</div><div><h2>Navigation, Material 3 & screen structure</h2><p>Know the core building blocks and the job each one performs.</p></div></div>
+ <h3>Navigation Compose</h3>
+ <div class="flow"><div class="node blue"><strong>NavController</strong><span>owns navigation actions / back stack</span></div><div class="arrow">→</div><div class="node"><strong>NavHost</strong><span>hosts graph + start destination</span></div><div class="arrow">→</div><div class="node teal"><strong>Destination</strong><span>screen content</span></div></div>
+ <table><tr><th>API</th><th>What to remember</th></tr>
+  <tr><td><b>rememberNavController()</b></td><td>Creates / remembers a NavController for the Composition.</td></tr>
+  <tr><td><b>NavHost</b></td><td>Defines the navigation graph and renders the current destination.</td></tr>
+  <tr><td><b>navigate(route)</b></td><td>Pushes / navigates to a destination according to options and graph.</td></tr>
+  <tr><td><b>popBackStack()</b></td><td>Returns to a previous destination in the back stack.</td></tr>
+  <tr><td><b>popUpTo</b></td><td>Controls which destinations are removed during navigation.</td></tr>
+  <tr><td><b>SavedStateHandle</b></td><td>Read small navigation arguments in a destination ViewModel; pass IDs, not large object graphs.</td></tr>
+ </table>
+ <div class="callout warn"><b>Route design:</b> Prefer passing a stable identifier (for example, <code>userId</code>) and loading the object from the repository at the destination. Don't place large or mutable domain objects in a route.</div>
+ <h3>Material 3 and common components</h3>
+ <div class="grid3">
+  <div class="card"><h4>MaterialTheme</h4><p>Provides <code>colorScheme</code>, <code>typography</code>, and <code>shapes</code> through CompositionLocal values.</p></div>
+  <div class="card"><h4>Scaffold</h4><p>Screen slots for app bars, FAB, snackbar and content; handle inner padding and insets.</p></div>
+  <div class="card"><h4>Surface / Card</h4><p>Material containers for background, elevation, shape, border and tonal surface behavior.</p></div>
+  <div class="card"><h4>TextField</h4><p>State-driven input: value / state + onValueChange or state-based APIs where supported by the library version.</p></div>
+  <div class="card"><h4>Dialog / Sheet</h4><p>Modal UI for focused tasks; keep open / close state explicit and hoisted as needed.</p></div>
+  <div class="card"><h4>SnackbarHost</h4><p>Snackbar display state; typically show via a coroutine and SnackbarHostState.</p></div>
+ </div>
+ <h3>Units and resources</h3>
+ <table><tr><th>Concept</th><th>Use</th></tr>
+  <tr><td><b>dp</b></td><td>Layout dimensions and spacing; density-independent pixels.</td></tr>
+  <tr><td><b>sp</b></td><td>Text size; respects font scaling.</td></tr>
+  <tr><td><b>Color / Brush</b></td><td>Solid color or gradient / other paint source.</td></tr>
+  <tr><td><b>painterResource()</b></td><td>Load supported drawable resources such as raster / vector drawable assets.</td></tr>
+  <tr><td><b>stringResource()</b></td><td>Read localized string resources.</td></tr>
+  <tr><td><b>WindowInsets</b></td><td>Account for system bars, cutouts, IME and safe drawing / gestures areas.</td></tr>
+ </table>
+</section>
+
+<section class="chapter" id="animation" data-search="animation animateAsState updateTransition Animatable AnimatedVisibility Crossfade rememberInfiniteTransition animateContentSize pointerInput detectTapGestures clickable gestures">
+ <div class="section-title"><div class="num">08</div><div><h2>Animation, gestures & input</h2><p>Pick declarative animation for state changes; use imperative tools when you need direct control.</p></div></div>
+ <h3>Animation decision map</h3>
+ <div class="flowcol">
+  <div class="node blue"><strong>What should animate?</strong></div><div class="down">↓</div>
+  <div class="branch">
+   <div class="card blue"><h4>One property to a target</h4><p>Value changes when state changes.</p><b>animate*AsState</b></div>
+   <div class="card teal"><h4>Several properties from one state</h4><p>Coordinate color, size, offset, etc.</p><b>updateTransition</b></div>
+   <div class="card purple"><h4>Direct control / gestures</h4><p>Animate, stop, snap, fling in coroutine.</p><b>Animatable</b></div>
+  </div>
+  <div class="branch">
+   <div class="card"><h4>Show / hide content</h4><b>AnimatedVisibility</b><p>Enter / exit transitions.</p></div>
+   <div class="card"><h4>Switch content</h4><b>Crossfade</b><p>Transition between content states.</p></div>
+   <div class="card"><h4>Repeat forever</h4><b>rememberInfiniteTransition</b><p>Looping animation.</p></div>
+  </div>
+ </div>
+ <table><tr><th>API</th><th>Simple recall</th></tr>
+  <tr><td><b>animateDpAsState / animateFloatAsState / animateColorAsState</b></td><td>Animate a target value whenever the target changes.</td></tr>
+  <tr><td><b>updateTransition</b></td><td>Drive multiple coordinated animated values from one state.</td></tr>
+  <tr><td><b>Animatable</b></td><td>Imperative animation with suspend APIs such as <code>animateTo</code>, <code>snapTo</code>, <code>stop</code>.</td></tr>
+  <tr><td><b>AnimatedVisibility</b></td><td>Animate insertion / removal based on visibility state.</td></tr>
+  <tr><td><b>animateContentSize</b></td><td>Animate size changes in content.</td></tr>
+  <tr><td><b>spring / tween / keyframes</b></td><td>Animation specs: physics-like response, duration + easing, or explicit values at times.</td></tr>
+ </table>
+ <h3>Gesture / input preference</h3>
+ <div class="grid2">
+  <div class="card teal"><h4>Prefer high-level modifiers</h4><p><code>clickable</code>, <code>combinedClickable</code>, <code>scrollable</code>, <code>draggable</code>, <code>anchoredDraggable</code> provide behavior plus semantics / accessibility integration.</p></div>
+  <div class="card amber"><h4>Use pointerInput for custom gestures</h4><p><code>pointerInput</code> with detectors such as <code>detectTapGestures</code> when the interaction cannot be expressed with higher-level APIs. Keys control pointer-input coroutine restart.</p></div>
+ </div>
+ <div class="callout good"><b>Interview cue:</b> Use <code>clickable</code> for ordinary taps; don't reimplement a button with raw pointer input unless there is a real custom gesture requirement. Semantics, focus and accessibility matter.</div>
+</section>
+
+<section class="chapter" id="performance" data-search="performance stability immutable stable strong skipping recomposition phases derivedStateOf snapshotFlow remember lambda lazy keys contentType baseline profiles benchmark">
+ <div class="section-title"><div class="num">09</div><div><h2>Performance, stability & recomposition</h2><p>Do not optimize by counting recompositions alone. Diagnose first, then measure.</p></div></div>
+ <h3>Performance decision sequence</h3>
+ <div class="flow"><div class="node blue"><strong>Observe a real issue</strong><span>jank / slow screen / wasted work</span></div><div class="arrow">→</div><div class="node"><strong>Diagnose</strong><span>trace, profiler, layout inspector</span></div><div class="arrow">→</div><div class="node teal"><strong>Optimize the cause</strong><span>state reads / lists / stability / work</span></div><div class="arrow">→</div><div class="node purple"><strong>Benchmark</strong><span>verify improvement</span></div></div>
+ <h3>Stability: the useful interview explanation</h3>
+ <table><tr><th>Concept</th><th>Meaning</th><th>Practical guidance</th></tr>
+  <tr><td><b>Immutable</b></td><td>Value cannot change after construction; properties are immutable and methods are referentially transparent.</td><td>Prefer immutable UI models with <code>val</code> properties.</td></tr>
+  <tr><td><b>Stable</b></td><td>Compose can reliably know when the type's observable properties change.</td><td>Use observable state correctly. Do not promise stability if the contract is false.</td></tr>
+  <tr><td><b>Unstable</b></td><td>Compose cannot rely on equality alone to know whether its internal properties changed.</td><td>Avoid in-place mutation that Compose cannot observe.</td></tr>
+  <tr><td><b>@Stable / @Immutable</b></td><td>Annotations declare a contract to the Compose compiler.</td><td>Do not add them as magic performance switches; only when the contract is true.</td></tr>
+ </table>
+ <div class="callout warn"><b>Modern Compose note:</b> Strong skipping is enabled by default starting with Kotlin 2.0.20. With strong skipping, restartable composables are skippable even with unstable parameters; stable parameters are compared structurally, unstable parameters by instance identity. Confirm your Kotlin / Compose compiler version before describing project behavior.</div>
+ <h3>Practical optimization reminders</h3>
+ <div class="grid2">
+  <div class="card"><h4>State reads</h4><p>Read fast-changing state as late as practical. A state read during composition can trigger recomposition; lambda-based layout / draw reads can sometimes defer work to a later phase.</p></div>
+  <div class="card"><h4>derivedStateOf</h4><p>Useful when inputs update more often than the UI needs. Example: show a “scroll to top” button only after index becomes greater than zero.</p></div>
+  <div class="card"><h4>Lazy lists</h4><p>Stable unique keys. Provide contentType for heterogeneous item layouts. Avoid <code>indexOf()</code> scans in each item. Use small Column / Row for small bounded collections.</p></div>
+  <div class="card"><h4>Expensive calculations</h4><p>Move data work out of composition; cache computations with <code>remember(keys)</code> only when appropriate. Do not use remember to hide incorrect state ownership.</p></div>
+  <div class="card"><h4>Collections</h4><p>Standard mutable lists are not observable Compose state. Publish a new immutable list through state or use snapshot-aware collections when mutating in place.</p></div>
+  <div class="card"><h4>Measure, don't guess</h4><p>Use profiling / tracing and benchmarks. Recomposition can be cheap; skipping has comparison overhead too. Optimize user-visible bottlenecks.</p></div>
+ </div>
+ <h3>Defer state reads: the idea</h3>
+ <pre>// Read in composition (can recompose when the value changes)
+val offset = listState.firstVisibleItemScrollOffset
+
+// Defer the read to placement via a lambda modifier
+Modifier.offset {
+    IntOffset(x = 0, y = listState.firstVisibleItemScrollOffset)
+}</pre>
+ <p class="mini">This is a technique, not a blanket rule. Make sure the UI behavior is correct, then benchmark the actual screen.</p>
+ <h3>Memory anchors</h3>
+ <div class="tagrow"><span class="tag">Stable identity ≠ object never changes</span><span class="tag">Recomposition ≠ automatically slow</span><span class="tag">Strong skipping ≠ ignore mutation bugs</span><span class="tag">Annotate only when true</span><span class="tag">Benchmark release behavior</span></div>
+</section>
+
+<section class="chapter" id="quality" data-search="testing Compose UI test semantics testTag createComposeRule onNodeWithText performClick assertIsDisplayed accessibility contentDescription AndroidView ComposeView interoperability adaptive custom layout">
+ <div class="section-title"><div class="num">10</div><div><h2>Testing, accessibility & interop</h2><p>Compose tests interact with the semantics tree, not merely pixels.</p></div></div>
+ <h3>Compose UI testing loop</h3>
+ <div class="flow"><div class="node blue"><strong>Set content</strong><span>ComposeTestRule.setContent</span></div><div class="arrow">→</div><div class="node"><strong>Find node</strong><span>semantics matcher</span></div><div class="arrow">→</div><div class="node teal"><strong>Perform action</strong><span>click / input / scroll</span></div><div class="arrow">→</div><div class="node purple"><strong>Assert</strong><span>text / state / visibility</span></div></div>
+ <pre>composeTestRule.setContent { LoginScreen(/* state + callbacks */) }
+
+composeTestRule
+    .onNodeWithText("Sign in")
+    .performClick()
+
+composeTestRule
+    .onNodeWithText("Welcome")
+    .assertIsDisplayed()</pre>
+ <table><tr><th>Concept</th><th>Why it matters</th></tr>
+  <tr><td><b>Semantics</b></td><td>Describes meaning / actions of UI for accessibility and testing.</td></tr>
+  <tr><td><b>contentDescription</b></td><td>Meaningful label for non-text content such as informative icons or images. Decorative images should not create redundant announcements.</td></tr>
+  <tr><td><b>testTag</b></td><td>Stable identifier for tests when visible text or semantics is insufficient. Avoid adding tags everywhere by default.</td></tr>
+  <tr><td><b>Semantics tree</b></td><td>Test matchers query nodes and their properties / actions; merged semantics can combine children.</td></tr>
+  <tr><td><b>Synchronization</b></td><td>Compose test framework waits for UI idleness for many operations; use clock control for time-dependent animation tests.</td></tr>
+ </table>
+ <h3>Compose and Views interoperability</h3>
+ <div class="grid2">
+  <div class="card blue"><h4>Use AndroidView</h4><p>Embed a classic Android View inside Compose when a required View-based SDK / widget has no Compose equivalent.</p></div>
+  <div class="card teal"><h4>Use ComposeView</h4><p>Host Compose content inside an existing View-based Activity / Fragment hierarchy.</p></div>
+ </div>
+ <h3>Advanced concepts to recognize</h3>
+ <div class="quicklist">
+  <div class="card"><h4>SubcomposeLayout</h4><p>Subcompose content during measurement when composition depends on constraints or other measured content.</p></div>
+  <div class="card"><h4>Layout / Modifier.Node</h4><p>Lower-level custom measurement, drawing, input or semantics behavior.</p></div>
+  <div class="card"><h4>CompositionLocal</h4><p>Scoped implicit dependencies such as theme / density; avoid turning into a global service locator.</p></div>
+  <div class="card"><h4>Adaptive UI</h4><p>Respond to available window size and posture; avoid assuming every device is a narrow phone.</p></div>
+ </div>
+</section>
+
+<section class="chapter" id="patterns" data-search="code examples rememberSaveable state hoisting TextField StateFlow collectAsStateWithLifecycle LaunchedEffect DisposableEffect rememberCoroutineScope LazyColumn key">
+ <div class="section-title"><div class="num">11</div><div><h2>Essential code patterns to memorize</h2><p>Small code fragments that cover a large part of Compose interview questions.</p></div></div>
+ <h3>1. Stateless child + hoisted state</h3>
+ <pre>@Composable
+fun Counter(value: Int, onIncrement: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("Count: $value")
+        Button(onClick = onIncrement) { Text("Add") }
+    }
+}
+
+@Composable
+fun CounterRoute() {
+    var count by rememberSaveable { mutableIntStateOf(0) }
+    Counter(value = count, onIncrement = { count++ })
+}</pre>
+ <h3>2. Lifecycle-aware state collection</h3>
+ <pre>@Composable
+fun SearchRoute(viewModel: SearchViewModel) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    SearchScreen(
+        uiState = uiState,
+        onQueryChange = viewModel::onQueryChange,
+        onRetry = viewModel::retry
+    )
+}</pre>
+ <h3>3. Private mutable state, public read-only StateFlow</h3>
+ <pre>class SearchViewModel : ViewModel() {
+    private val _uiState = MutableStateFlow(SearchUiState())
+    val uiState: StateFlow&lt;SearchUiState&gt; = _uiState.asStateFlow()
+
+    fun onQueryChange(query: String) {
+        _uiState.update { it.copy(query = query) }
+    }
+}</pre>
+ <h3>4. Keyed effect vs event coroutine</h3>
+ <div class="grid2">
+  <div class="card blue"><h4>Restart on key change</h4><pre>LaunchedEffect(articleId) {
+    viewModel.load(articleId)
+}</pre></div>
+  <div class="card teal"><h4>Start on click</h4><pre>val scope = rememberCoroutineScope()
+Button(onClick = {
+    scope.launch { snackbar.showSnackbar("Done") }
+}) { Text("Save") }</pre></div>
+ </div>
+ <h3>5. Lazy list identity</h3>
+ <pre>LazyColumn {
+    items(
+        items = products,
+        key = { it.id },
+        contentType = { it.category }
+    ) { product ->
+        ProductRow(product)
+    }
+}</pre>
+ <h3>6. Modifier parameter pattern</h3>
+ <pre>@Composable
+fun InfoCard(
+    title: String,
+    modifier: Modifier = Modifier
+) {
+    Card(modifier = modifier) {
+        Text(title, modifier = Modifier.padding(16.dp))
+    }
+}</pre>
+ <div class="callout good"><b>Code review checklist:</b> Is state owned by the correct layer? Is the child reusable? Are effects keyed and cleaned up? Is Flow collection lifecycle-aware? Do lazy items have stable identity? Is the modifier respected?</div>
+</section>
+
+<section class="chapter" id="rapid" data-search="interview rapid recall quick questions remember rememberSaveable state hoisting LaunchedEffect DisposableEffect SideEffect StateFlow SharedFlow key contentType recomposition stability">
+ <div class="section-title"><div class="num">12</div><div><h2>Interview rapid recall</h2><p>Read the question, answer in one sentence, then expand with a code example if asked.</p></div></div>
+ <div class="quicklist">
+  <div class="card"><span class="kicker">State</span><h4>remember vs rememberSaveable?</h4><p>Recomposition retention vs saved-instance-state restoration for small UI state.</p></div>
+  <div class="card"><span class="kicker">Architecture</span><h4>What is state hoisting?</h4><p>Move state to a caller; pass state down and events up.</p></div>
+  <div class="card"><span class="kicker">Runtime</span><h4>What is recomposition?</h4><p>Re-run affected composable scopes when observed inputs change; unchanged work may be skipped.</p></div>
+  <div class="card"><span class="kicker">Effects</span><h4>LaunchedEffect vs rememberCoroutineScope?</h4><p>Effect-key / Composition-triggered coroutine vs event-triggered coroutine scope.</p></div>
+  <div class="card"><span class="kicker">Effects</span><h4>DisposableEffect?</h4><p>Register resource when entering; always remove it in onDispose.</p></div>
+  <div class="card"><span class="kicker">Effects</span><h4>SideEffect?</h4><p>Publish state to non-Compose code after every successful recomposition.</p></div>
+  <div class="card"><span class="kicker">Flow</span><h4>StateFlow vs SharedFlow?</h4><p>State holder with latest value vs configurable hot broadcast stream.</p></div>
+  <div class="card"><span class="kicker">Lifecycle</span><h4>collectAsStateWithLifecycle?</h4><p>Collect a Flow in a lifecycle-aware way and expose it as Compose State.</p></div>
+  <div class="card"><span class="kicker">Lists</span><h4>key vs contentType?</h4><p>Identity across changes vs grouping similar item layouts for reuse.</p></div>
+  <div class="card"><span class="kicker">Layout</span><h4>Row vs Column vs Box?</h4><p>Horizontal vs vertical vs overlay / stacking.</p></div>
+  <div class="card"><span class="kicker">Performance</span><h4>What is stability?</h4><p>Whether Compose can reliably know when a type's observable value changes.</p></div>
+  <div class="card"><span class="kicker">Performance</span><h4>Is recomposition bad?</h4><p>No. It is normal; optimize only when profiling identifies a user-visible cost.</p></div>
+ </div>
+ <h3>Common wrong answers to avoid</h3>
+ <table><tr><th>Do not say</th><th>Say this instead</th></tr>
+  <tr><td>“remember survives rotation.”</td><td>remember survives recomposition while its call site remains; rememberSaveable restores small saved UI state.</td></tr>
+  <tr><td>“ViewModel survives process death.”</td><td>ViewModel survives configuration changes; restore small state with SavedStateHandle and persist durable data separately.</td></tr>
+  <tr><td>“LaunchedEffect runs only once.”</td><td>It runs for a composition entry and restarts when its keys change.</td></tr>
+  <tr><td>“SharedFlow is always an event queue.”</td><td>SharedFlow is a configurable broadcast stream; replay / buffer / subscribers determine delivery.</td></tr>
+  <tr><td>“Every list should use LazyColumn.”</td><td>Use lazy layouts for larger or virtualized lists; regular Row / Column can be better for small bounded content.</td></tr>
+  <tr><td>“@Stable makes it faster.”</td><td>It declares a contract. Use only when true and benchmark any performance benefit.</td></tr>
+ </table>
+ <h3>30-second verbal summary</h3>
+ <div class="callout good">“Compose is declarative: composables describe UI from state. State changes invalidate the scopes that read them and Compose may recompose or skip work. I hoist state to the lowest common owner, expose immutable UI state from a ViewModel, and collect StateFlow with collectAsStateWithLifecycle. I use remember for Composition-local retention, rememberSaveable for small restorable UI state, and effects only for work outside pure composition. For performance, I use stable lazy-list keys, keep state reads and work scoped appropriately, and profile before optimizing.”</div>
+</section>
+
+<section class="chapter" id="references" data-search="references official Android developers docs Compose state lifecycle side effects modifiers lists stability testing performance">
+ <div class="section-title"><div class="num">13</div><div><h2>Official references & version notes</h2><p>Use the Android Developers documentation as the source of truth when API details evolve.</p></div></div>
+ <ul class="source-list">
+  <li><a href="https://developer.android.com/develop/ui/compose">Jetpack Compose overview</a> — concepts, APIs and learning path.</li>
+  <li><a href="https://developer.android.com/develop/ui/compose/state">State and Jetpack Compose</a> — state, hoisting, observable state and Flow integration.</li>
+  <li><a href="https://developer.android.com/develop/ui/compose/state-saving">Save UI state in Compose</a> — rememberSaveable, Saver and saved state guidance.</li>
+  <li><a href="https://developer.android.com/develop/ui/compose/side-effects">Side-effects in Compose</a> — LaunchedEffect, DisposableEffect, produceState, derivedStateOf and snapshotFlow.</li>
+  <li><a href="https://developer.android.com/develop/ui/compose/lifecycle">Lifecycle of composables</a> — composition lifecycle, identity and skipping.</li>
+  <li><a href="https://developer.android.com/develop/ui/compose/modifiers">Compose modifiers</a> — modifier ordering and best practices.</li>
+  <li><a href="https://developer.android.com/develop/ui/compose/lists">Lazy lists and grids</a> — lazy layouts, keys and content types.</li>
+  <li><a href="https://developer.android.com/develop/ui/compose/performance">Compose performance</a> — phases, best practices and benchmarking.</li>
+  <li><a href="https://developer.android.com/develop/ui/compose/performance/stability">Stability in Compose</a> and <a href="https://developer.android.com/develop/ui/compose/performance/stability/strongskipping">Strong skipping</a> — stability contracts and skipping behavior.</li>
+  <li><a href="https://developer.android.com/develop/ui/compose/testing">Testing Compose layouts</a> — semantics, finders, actions and assertions.</li>
+  <li><a href="https://developer.android.com/develop/ui/compose/navigation">Navigation with Compose</a> — navigation graph and destinations.</li>
+  <li><a href="https://developer.android.com/develop/ui/compose/animation">Animation in Compose</a> — animation APIs and transitions.</li>
+ </ul>
+ <div class="callout warn"><b>Version note:</b> API availability and recommendations can change with Compose, Navigation, Lifecycle and Kotlin versions. This guide emphasizes current Android Developers guidance available on 31 Oct 2026. Check your project's dependency versions before copying snippets verbatim; imports and some API overloads may differ.</div>
+ <div class="footer">Prepared as an interview revision aid. The examples are compact teaching patterns, not a complete application. Verify behavior against the versions and architecture used in your project.</div>
+</section>
+</main>
+</div>
+<script>
+const searchBox=document.getElementById('searchBox');
+searchBox?.addEventListener('input',()=>{
+ const q=searchBox.value.trim().toLowerCase();
+ document.querySelectorAll('[data-search]').forEach(section=>{
+   const hay=(section.innerText+' '+(section.dataset.search||'')).toLowerCase();
+   section.classList.toggle('hidden',!!q&&!hay.includes(q));
+ });
+});
+const links=[...document.querySelectorAll('#guideNav a')];
+const targets=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+if('IntersectionObserver' in window){const observer=new IntersectionObserver(entries=>{entries.forEach(e=>{if(e.isIntersecting){links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+e.target.id));}})},{rootMargin:'-20% 0px -70% 0px'});targets.forEach(t=>observer.observe(t));}
+</script>
+</body>
+</html>

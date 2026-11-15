@@ -21,6 +21,7 @@ This project helps users:
 - Question library with search, filters, and roadmap-level grouping
 - Practice mode with timer, answer draft, hints, and solution reveal
 - Global Kotlin/Java switch affecting the active learning flow
+- Android quick review for Coroutines and Flow, plus a visual Jetpack Compose learning studio with decision guides, code patterns, and rapid recall
 - Smart hint system with best approach, alternative approach, and edge-case guidance
 - Topic and keyword-based review
 - Analytics for completion and mastery progress

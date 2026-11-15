@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { parseChecklistMarkdown, seedSkillChecklists } from './skill-checklists';
 
 describe('skill checklist catalog seed', () => {
-  it('imports all six checklist documents and their checklist items', () => {
-    expect(seedSkillChecklists).toHaveLength(6);
-    expect(new Set(seedSkillChecklists.map((checklist) => checklist.id)).size).toBe(6);
-    expect(seedSkillChecklists.reduce((total, checklist) => total + checklist.sections.reduce((sectionTotal, section) => sectionTotal + section.items.length, 0), 0)).toBe(721);
+  it('imports all checklist documents and their checklist items', () => {
+    expect(seedSkillChecklists).toHaveLength(35);
+    expect(new Set(seedSkillChecklists.map((checklist) => checklist.id)).size).toBe(35);
+    expect(seedSkillChecklists.reduce((total, checklist) => total + checklist.sections.reduce((sectionTotal, section) => sectionTotal + section.items.length, 0), 0)).toBe(730);
     expect(seedSkillChecklists.every((checklist) => checklist.sections.length > 0)).toBe(true);
   });
 

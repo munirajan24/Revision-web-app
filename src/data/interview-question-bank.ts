@@ -269,7 +269,7 @@ export function parseInterviewQuestionMarkdown(markdown: string): InterviewQuest
 }
 
 function isStudySection(title: string): boolean {
-  return ['JAVA', 'KOTLIN', 'ANDROID', 'TESTING', 'GIT', 'iOS Development - swift'].includes(title);
+  return ['JAVA', 'KOTLIN', 'ANDROID', 'TESTING', 'GIT', 'Programming', 'iOS Development - swift'].includes(title);
 }
 
 function getCategoryInfo(section: string): { categoryId: QuestionCategoryId; prefix: string } {
@@ -279,6 +279,7 @@ function getCategoryInfo(section: string): { categoryId: QuestionCategoryId; pre
   if (normalized === 'android') return { categoryId: 'android', prefix: 'A' };
   if (normalized === 'testing') return { categoryId: 'testing', prefix: 'T' };
   if (normalized === 'git') return { categoryId: 'general', prefix: 'G' };
+  if (normalized === 'programming') return { categoryId: 'general', prefix: 'P' };
   if (normalized.startsWith('ios development')) return { categoryId: 'general', prefix: 'I' };
   const setNumber = section.match(/^Set\s+(\d+)/i)?.[1];
   return { categoryId: 'general', prefix: setNumber ? `S${setNumber}-` : 'G' };

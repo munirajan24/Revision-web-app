@@ -21,6 +21,16 @@ describe('Complete Revision HTML question bank', () => {
     expect(interviewQuestions.find((question) => question.displayId === 'K001')?.categoryId).toBe('kotlin');
     expect(interviewQuestions.find((question) => question.displayId === 'A001')?.categoryId).toBe('android');
     expect(interviewQuestions.find((question) => question.displayId === 'T001')?.categoryId).toBe('testing');
+    const programmingQuestion = interviewQuestions.find((question) =>
+      question.prompt.startsWith('Given a list of integers in Kotlin'),
+    );
+    expect(programmingQuestion).toMatchObject({
+      displayId: 'P001',
+      categoryId: 'general',
+      section: 'Programming',
+      hasAnswer: true,
+    });
+    expect(programmingQuestion?.answerHtml).toContain('myList');
     expect(interviewQuestions.some((question) => question.section.startsWith('Set 11'))).toBe(true);
     const setCounts = new Map<string, number>();
     for (const question of interviewQuestions) {

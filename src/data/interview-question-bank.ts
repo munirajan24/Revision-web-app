@@ -83,7 +83,80 @@ export function parseInterviewQuestionHtml(html: string): InterviewQuestion[] {
       continue;
     }
 
+    if (mode === 'interview-sets' && isElement(node) && node.tagName === 'p') {
+      const prompt = normalizeText(getText(node));
+      if (isInterviewSetQuestionParagraph(prompt)) {
+        const answerNodes: HtmlNode[] = [];
+        for (let answerIndex = index + 1; answerIndex < children.length; answerIndex += 1) {
+          const answerNode = children[answerIndex];
+          if (isSectionHeading(answerNode) || isQuestionList(answerNode) || isInterviewSetQuestionParagraph(normalizeText(getText(answerNode)))) break;
+          answerNodes.push(answerNode);
+        }
+        const answerHtml = serializeSafeChildren(answerNodes, monospaceClasses);
+        const answerText = normalizeAnswerText(answerNodes.map(getText).join(''));
+        const section = [topSection, subsection].filter(Boolean).join(' / ');
+        const sequence = (sectionCounts.get(topSection) ?? 0) + 1;
+        sectionCounts.set(topSection, sequence);
+        const { categoryId, prefix } = getCategoryInfo(topSection);
+        const displayId = `${prefix}${String(sequence).padStart(3, '0')}`;
+        const id = `html-${slugify(topSection)}-${String(sequence).padStart(3, '0')}`;
+        questions.push({
+          id,
+          displayId,
+          categoryId,
+          category: getCategoryLabel(categoryId),
+          section,
+          prompt,
+          answerMarkdown: answerText,
+          answerHtml: answerText || /<img\b/i.test(answerHtml) ? answerHtml : undefined,
+          hasAnswer: Boolean(answerText || /<img\b/i.test(answerHtml)),
+          hasAddedAnswer: false,
+          hasAdditionalNotes: false,
+        });
+        continue;
+      }
+    }
+
     if (mode === 'none' || !includeSection || !isQuestionList(node)) continue;
+
+    if (mode === 'interview-sets') {
+      const listItems = getChildNodes(node).filter(isElement).filter((child) => child.tagName === 'li');
+      const answerNodes: HtmlNode[] = [];
+      for (let answerIndex = index + 1; answerIndex < children.length; answerIndex += 1) {
+        const answerNode = children[answerIndex];
+        if (isSectionHeading(answerNode) || isQuestionList(answerNode)) break;
+        answerNodes.push(answerNode);
+      }
+      const answerHtml = serializeSafeChildren(answerNodes, monospaceClasses);
+      const answerText = normalizeAnswerText(answerNodes.map(getText).join(''));
+      const hasAnswer = Boolean(answerText || /<img\b/i.test(answerHtml));
+      for (const listItem of listItems) {
+        const prompt = normalizeText(getText(listItem));
+        if (!prompt) continue;
+
+        const section = [topSection, subsection].filter(Boolean).join(' / ');
+        const sequence = (sectionCounts.get(topSection) ?? 0) + 1;
+        sectionCounts.set(topSection, sequence);
+        const { categoryId, prefix } = getCategoryInfo(topSection);
+        const displayId = `${prefix}${String(sequence).padStart(3, '0')}`;
+        const id = `html-${slugify(topSection)}-${String(sequence).padStart(3, '0')}`;
+
+        questions.push({
+          id,
+          displayId,
+          categoryId,
+          category: getCategoryLabel(categoryId),
+          section,
+          prompt,
+          answerMarkdown: answerText,
+          answerHtml: hasAnswer ? answerHtml : undefined,
+          hasAnswer,
+          hasAddedAnswer: false,
+          hasAdditionalNotes: false,
+        });
+      }
+      continue;
+    }
 
     const prompt = normalizeText(getText(getFirstElement(node, 'li')));
     if (!prompt) continue;
@@ -234,6 +307,14 @@ function isQuestionList(node: HtmlNode): node is HtmlElement {
   return /(?:^|\s)lst-kix_[^\s]*-0(?:\s|$)/.test(getAttribute(node, 'class') ?? '');
 }
 
+function isInterviewSetQuestionParagraph(text: string): boolean {
+  const normalized = normalizeText(text);
+  if (!normalized) return false;
+  if (/^(?:Output|Result|Example|Explanation|Answer|Note)\b/i.test(normalized)) return false;
+  return normalized.endsWith('?')
+    || /^(?:Find|Write|Code|Explain|What|Why|How|Can|Does|Tell|Which|Difference|Using|Using an example)\b/i.test(normalized);
+}
+
 function isSectionHeading(node: HtmlNode): boolean {
   return isElement(node) && ['h1', 'h2', 'h3'].includes(node.tagName);
 }
@@ -288,13 +369,13 @@ function serializeSafeHtml(node: HtmlNode, monospaceClasses: ReadonlySet<string>
   if (!isElement(node)) return '';
   if (['script', 'style', 'iframe', 'object', 'embed', 'svg', 'math'].includes(node.tagName)) return '';
   if (node.tagName === 'pre') {
-    return `<pre class="question-answer-code"><code>${highlightSourceCode(getCodeText(node))}</code></pre>`;
+    return `<pre class="question-answer-code"><code>${highlightSourceCode(getCodeBlockText(node))}</code></pre>`;
   }
   if (node.tagName === 'code') {
     return `<code class="answer-code">${highlightSourceCode(getCodeText(node))}</code>`;
   }
-  if (node.tagName === 'p' && isCodeOnly(node, monospaceClasses)) {
-    return `<pre class="question-answer-code"><code>${highlightSourceCode(normalizeCodeText(getCodeText(node)))}</code></pre>`;
+  if (node.tagName === 'p' && isCodeParagraph(node, monospaceClasses)) {
+    return `<pre class="question-answer-code"><code>${highlightSourceCode(getCodeBlockText(node))}</code></pre>`;
   }
   if (node.tagName === 'span') {
     const imageCrop = getImageCrop(node);
@@ -307,7 +388,8 @@ function serializeSafeHtml(node: HtmlNode, monospaceClasses: ReadonlySet<string>
       return `<div class="question-answer-image-frame" style="aspect-ratio: ${frameWidth} / ${frameHeight}">${imageHtml}</div>`;
     }
   }
-  const innerHtml = serializeSafeChildren(node.childNodes, monospaceClasses);
+  const serializedChildren = serializeSafeChildren(node.childNodes, monospaceClasses);
+  const innerHtml = node.tagName === 'p' ? formatInlineCodeFragments(serializedChildren) : serializedChildren;
   if (node.tagName === 'span') {
     const formatted = isMonospaceSpan(node, monospaceClasses)
       ? `<code class="answer-code">${highlightSourceCode(getCodeText(node))}</code>`
@@ -380,7 +462,7 @@ function serializeSafeChildren(children: HtmlNode[], monospaceClasses: ReadonlyS
         }
         break;
       }
-      const code = paragraphs.map((paragraph) => normalizeCodeText(getCodeText(paragraph))).join('\n');
+      const code = paragraphs.map(getCodeBlockText).join('\n');
       html += `<pre class="question-answer-code"><code>${highlightSourceCode(code)}</code></pre>`;
       index = nextIndex;
       continue;
@@ -415,7 +497,33 @@ function isCodeParagraph(node: HtmlNode | undefined, monospaceClasses: ReadonlyS
   return node !== undefined
     && isElement(node)
     && node.tagName === 'p'
-    && isCodeOnly(node, monospaceClasses);
+    && (isCodeOnly(node, monospaceClasses) || isCodeLikeParagraph(node));
+}
+
+function isCodeLikeParagraph(node: HtmlElement): boolean {
+  const text = getCodeBlockText(node).trim();
+  const startsWithDeclaration = /^(?:@\w|(?:public|private|protected|static|final|abstract|class|interface|enum|fun|expect|actual|val|var|return|int|new|suspend|data|sealed|object|override|import)\b|[A-Z][\w$<>?,.[\]]*\s+[A-Za-z_$][\w$]*\s*=|[{}];?$)/;
+  const startsWithCall = /^\.?[A-Za-z_$][\w$.]*\s*\([^;\n]*\)\s*(?:\{|;|->|$)/;
+  return /^\s*\/\//.test(text)
+    || (/[{}();=:@]/.test(text) && (startsWithDeclaration.test(text) || startsWithCall.test(text)));
+}
+
+function getCodeBlockText(node: HtmlNode): string {
+  const text = getCodeBlockSourceText(node)
+    .replace(/^\s*java\s*<br\s*\/?>/i, '')
+    .replace(/<br\s*\/?>/gi, '\u0000')
+    .replace(/\u00a0/g, ' ');
+  return text.split('\u0000').map(normalizeCodeText).join('\n');
+}
+
+function getCodeBlockSourceText(node: HtmlNode): string {
+  if (node.nodeName === '#text') return 'value' in node ? node.value : '';
+  if (!isElement(node)) return '';
+  if (node.tagName === 'br') return '\u0000';
+  return node.childNodes.map((child) => {
+    const text = getCodeBlockSourceText(child);
+    return child.nodeName === '#text' && /^\s*$/.test(text) && /[\r\n]/.test(text) ? '' : text;
+  }).join('');
 }
 
 function isBlankParagraph(node: HtmlNode): node is HtmlElement {
@@ -444,6 +552,28 @@ function getCodeText(node: HtmlNode): string {
     const text = getCodeText(child);
     return child.nodeName === '#text' && /^\s*$/.test(text) && /[\r\n]/.test(text) ? '' : text;
   }).join('');
+}
+
+function formatInlineCodeFragments(html: string): string {
+  if (/<(?:code|pre)\b/i.test(html)) return html;
+  const patterns = [
+    /\bpublic(?:\s|<[^>]+>)+(?:(?:static|final)(?:\s|<[^>]+>)+)?void\s+\w+\([^)]*\)\s+throws\s+(?:<[^>]+>)*InterruptedException(?:<\/[^>]+>)*\s*\{\s*\/\/\.\.\.\s*\}?/gi,
+    /\bfun\s+\w+\([^)]*\)(?:\s*:\s*[\w?.<>]+)?(?=\s*→)/g,
+    /\b(?:sleep|wait|notify|notifyAll)\(\)/g,
+    /\b[A-Za-z_$][\w$]*Scope(?:\([^)]*\))?\.launch(?:\s*\{\s*\})?/g,
+    /\b(?:coroutineScope|supervisorScope)\s*\{\s*\.\.\.\s*\}/g,
+    /\b(?:launch|Launch)\s*\{\s*\}/g,
+  ];
+  return patterns.reduce(
+    (formatted, pattern) => formatted.replace(pattern, (match, offset: number, source: string) => {
+      const lastCodeStart = source.lastIndexOf('<code', offset);
+      const lastCodeEnd = source.lastIndexOf('</code>', offset);
+      return lastCodeStart > lastCodeEnd
+        ? match
+        : `<code class="answer-code">${match.replace(/\s+/g, ' ')}</code>`;
+    }),
+    html,
+  );
 }
 
 function getMonospaceClasses(document: HtmlNode): Set<string> {

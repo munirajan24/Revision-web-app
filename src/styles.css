@@ -1514,7 +1514,7 @@ body[data-theme='light'] .solution-chip.active {
 .interview-check-item-copy { flex: 0 0 auto; min-height: 26px; padding: 0.25rem 0.45rem; border: 1px solid var(--border); background: transparent; color: var(--muted); font-size: 0.65rem; line-height: 1.2; }
 .interview-check-item-copy:hover { border-color: var(--primary); background: transparent; color: var(--primary); }
 .interview-check-item-copy[aria-label="Copied checklist item"] { color: var(--success); }
-.checklist-code-term { padding: 0.08em 0.28em; border: 1px solid rgba(70, 211, 154, 0.18); border-radius: 4px; background: rgba(70, 211, 154, 0.11); color: #85e0ba; font-family: 'Consolas', 'SFMono-Regular', monospace; font-size: 0.91em; font-weight: 650; white-space: nowrap; }
+.checklist-code-term { padding: 0.08em 0.28em; border: 1px solid color-mix(in srgb, var(--primary) 30%, transparent); border-radius: 4px; background: color-mix(in srgb, var(--primary) 12%, transparent); color: var(--primary); font-family: 'Consolas', 'SFMono-Regular', monospace; font-size: 0.91em; font-weight: 650; white-space: nowrap; }
 .interview-check-item:has(input:checked) .interview-check-item-label > span { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--success); }
 .priority-label, .low-priority-label { flex: 0 0 auto; color: var(--warning); font-size: 0.63rem; text-transform: uppercase; }
 .low-priority-label { color: var(--muted); }

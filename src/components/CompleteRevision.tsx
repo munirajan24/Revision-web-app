@@ -22,7 +22,11 @@ export default function CompleteRevision() {
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
   const sections = useMemo(
-    () => [...new Set(interviewQuestions.map((question) => question.section ?? question.category))],
+    () => [...new Map(interviewQuestions.map((question): [string, string] => {
+      if (question.categoryId !== 'general') return [question.categoryId, question.category];
+      const topSection = question.section?.split(' / ')[0];
+      return topSection ? [`section:${topSection}`, topSection] : ['general', question.category];
+    }))],
     [],
   );
 
@@ -38,7 +42,7 @@ export default function CompleteRevision() {
     const normalizedSearch = search.trim().toLowerCase();
     return interviewQuestions.filter((question) => {
       const questionProgress = progress[question.id];
-      if (sectionFilter !== 'all' && (question.section ?? question.category) !== sectionFilter) return false;
+      if (sectionFilter !== 'all' && getSectionFilterKey(question) !== sectionFilter) return false;
       if (statusFilter === 'new' && questionProgress?.status) return false;
       if ((statusFilter === 'learning' || statusFilter === 'mastered') && questionProgress?.status !== statusFilter) return false;
       if (bookmarkedOnly && !questionProgress?.bookmarked) return false;
@@ -121,7 +125,7 @@ export default function CompleteRevision() {
           <span>Section</span>
           <select value={sectionFilter} onChange={(event) => setSectionFilter(event.target.value)}>
             <option value="all">All sections</option>
-            {sections.map((section) => <option key={section} value={section}>{section}</option>)}
+            {sections.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
           </select>
         </label>
         <label>
@@ -201,4 +205,10 @@ export default function CompleteRevision() {
       {filteredQuestions.length > visibleCount && <div ref={loadMoreRef} className="revision-load-more-sentinel" aria-hidden="true" />}
     </section>
   );
+}
+
+function getSectionFilterKey(question: InterviewQuestion): string {
+  if (question.categoryId !== 'general') return question.categoryId;
+  const topSection = question.section?.split(' / ')[0];
+  return topSection ? `section:${topSection}` : 'general';
 }

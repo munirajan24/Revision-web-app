@@ -6,8 +6,8 @@ import QuestionAnswer from '../components/QuestionAnswer';
 
 describe('Complete Revision HTML question bank', () => {
   it('loads every question in source order and keeps the HTML section numbering', () => {
-    expect(interviewQuestions).toHaveLength(413);
-    expect(new Set(interviewQuestions.map((question) => question.id)).size).toBe(413);
+    expect(interviewQuestions.length).toBeGreaterThan(413);
+    expect(new Set(interviewQuestions.map((question) => question.id)).size).toBe(interviewQuestions.length);
     expect(interviewQuestions.every((question) => question.prompt.trim())).toBe(true);
 
     expect(interviewQuestions[0]).toMatchObject({
@@ -22,6 +22,24 @@ describe('Complete Revision HTML question bank', () => {
     expect(interviewQuestions.find((question) => question.displayId === 'A001')?.categoryId).toBe('android');
     expect(interviewQuestions.find((question) => question.displayId === 'T001')?.categoryId).toBe('testing');
     expect(interviewQuestions.some((question) => question.section.startsWith('Set 11'))).toBe(true);
+    const setCounts = new Map<string, number>();
+    for (const question of interviewQuestions) {
+      const setName = question.section?.match(/^Set \d+/)?.[0];
+      if (setName) setCounts.set(setName, (setCounts.get(setName) ?? 0) + 1);
+    }
+    expect(Object.fromEntries(setCounts)).toEqual({
+      'Set 1': 34,
+      'Set 2': 18,
+      'Set 3': 43,
+      'Set 4': 4,
+      'Set 5': 18,
+      'Set 6': 73,
+      'Set 7': 14,
+      'Set 8': 10,
+      'Set 9': 17,
+      'Set 10': 18,
+      'Set 11': 9,
+    });
     expect(interviewQuestions.some((question) => question.section.includes('iOS Development'))).toBe(true);
     expect(interviewQuestions.some((question) => question.prompt.includes('Udemy Free Course'))).toBe(false);
     expect(interviewQuestions.some((question) => question.prompt.includes('Road map'))).toBe(false);
@@ -163,6 +181,90 @@ describe('Complete Revision HTML question bank', () => {
     expect(functionalInterfaceBlock).toContain('void say(String name);');
     expect(functionalInterfaceBlock).toContain('Greeting g = new Greeting() {');
     expect(functionalInterfaceBlock).toContain('System.out.println("Hello " + name);');
+  });
+
+  it('renders the JUnit expected-exception example as one code block', () => {
+    const question = interviewQuestions.find((entry) => entry.answerMarkdown.includes('testDivideByZero'));
+    expect(question).toBeDefined();
+    if (!question) throw new Error('Missing JUnit expected-exception example.');
+
+    const rendered = renderToStaticMarkup(createElement(QuestionAnswer, { question }));
+    const blocks = [...rendered.matchAll(/<pre class="question-answer-code"><code>([\s\S]*?)<\/code><\/pre>/g)]
+      .map(([, code]) => code.replace(/<[^>]*>/g, '').replace(/&quot;/g, '"').replace(/&amp;/g, '&'));
+    const exampleBlock = blocks.find((code) => code.includes('@Test(expected = ArithmeticException.class)'));
+
+    expect(exampleBlock).toContain('public void testDivideByZero() {');
+    expect(exampleBlock).toContain('int result = 5 / 0;');
+    expect(exampleBlock).toContain('}');
+  });
+
+  it('formats the remaining audited Java, Kotlin, and Android code examples', () => {
+    const expectedCodeByQuestion: Record<string, string[]> = {
+      J022: [
+        'public static void sleep(long millis, int nanos) throws InterruptedException { //...',
+        'public final void wait() throws InterruptedException { //...}',
+      ],
+      J038: [
+        '@FunctionalInterface',
+        'Greeting g = name -> System.out.println("Hi " + name);',
+        'Greeting g = System.out::println;',
+      ],
+      K031: ['int age = 30;', 'final int age = 30;', 'static final int MAX = 100;'],
+      K048: [
+        'expect fun getNameOfPlatform(): String',
+        'fun sayWelcome(): String =',
+        'getNameOfPlatform()',
+        'actual fun getNameOfPlatform(): String {',
+      ],
+      K052: ['fun show(name: String, age: Int = 18)'],
+      K057: ['CoroutineScope().launch', 'coroutineScope { ... }', 'supervisorScope { ... }', 'GlobalScope.launch'],
+      A078: ['OkHttpClient client = new OkHttpClient.Builder()', '.sslSocketFactory(sslContext.getSocketFactory(), trustManager)', '.build();'],
+      A134: ['Button(onClick = {', 'val navController = rememberNavController()', 'NavHost(navController = navController, startDestination = "screen1") {'],
+      'Find second maximum number from array ?': ['int [] a = {5, 7,1,3,9,2}'],
+      'Write syntax of Coroutines, Sealed Classes, Extension function, Generics in Kotlin': ['class Car(private val engine: Engine) {', 'val result = someNullableValue?.let {', 'println("Name: $name, Age: $age")', 'CouroutineScope(Dispatchers.IO).launch{}'],
+    };
+
+    for (const [questionKey, expectedSnippets] of Object.entries(expectedCodeByQuestion)) {
+      const question = interviewQuestions.find((entry) =>
+        entry.displayId === questionKey || entry.prompt === questionKey,
+      );
+      expect(question, `Missing question ${questionKey}`).toBeDefined();
+      if (!question) throw new Error(`Missing question ${questionKey}.`);
+
+      const rendered = renderToStaticMarkup(createElement(QuestionAnswer, { question }));
+      const codeMarkup = [...rendered.matchAll(/<pre class="question-answer-code">[\s\S]*?<\/pre>|<code class="answer-code">[\s\S]*?<\/code>/g)]
+        .map(([markup]) => markup.replace(/<[^>]*>/g, ''))
+        .join('\n')
+        .replace(/&quot;/g, '"')
+        .replace(/&#x27;/g, "'")
+        .replace(/&gt;/g, '>')
+        .replace(/&lt;/g, '<')
+        .replace(/&amp;/g, '&');
+
+      for (const snippet of expectedSnippets) {
+        expect(codeMarkup, `${questionKey} should format "${snippet}" as code`).toContain(snippet);
+      }
+      if (questionKey === 'J022') {
+        expect(rendered).toContain('<code class="answer-code">sleep()</code>');
+        expect(rendered).toContain('<code class="answer-code">wait()</code>');
+      }
+      if (questionKey === 'A134') {
+        const codeBlocks = [...rendered.matchAll(/<pre class="question-answer-code"><code>([\s\S]*?)<\/code><\/pre>/g)]
+          .map(([, markup]) => markup.replace(/<[^>]*>/g, '')
+            .replace(/&quot;/g, '"')
+            .replace(/&gt;/g, '>')
+            .replace(/&lt;/g, '<')
+            .replace(/&amp;/g, '&'));
+        const implicitNavigation = codeBlocks.find((code) => code.includes('// Implicit navigation'));
+        const explicitNavigation = codeBlocks.find((code) => code.includes('// Explicit navigation'));
+
+        expect(codeBlocks).toHaveLength(2);
+        expect(implicitNavigation).toContain('Text("Click me")');
+        expect(explicitNavigation).toContain('composable("screen2/{param}") { backStackEntry ->');
+        expect(explicitNavigation).toContain('val param = backStackEntry.arguments?.getString("param")');
+        expect(explicitNavigation).toContain('Screen2(param = param)');
+      }
+    }
   });
 
   it('extracts answers and section-specific questions while excluding non-Q&A headings', () => {

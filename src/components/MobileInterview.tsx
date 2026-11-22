@@ -36,8 +36,8 @@ export default function MobileInterview() {
   const [storageError, setStorageError] = useState('');
   const [questionBank] = useState(() => getMobileQuestionBank());
   const [questionSets] = useState(() => getMobileQuestionSets(questionBank));
-  const [selectedSetIds, setSelectedSetIds] = useState(() => questionSets.map((set) => set.id));
-  const [selectedSectionIds, setSelectedSectionIds] = useState(() => questionSets.flatMap((set) => set.sections.map((section) => section.id)));
+  const [selectedSetIds, setSelectedSetIds] = useState<string[]>([]);
+  const [selectedSectionIds, setSelectedSectionIds] = useState<string[]>([]);
   const [randomizeQuestionOrder, setRandomizeQuestionOrder] = useState(false);
   const [history, setHistory] = useState(() => loadMobileInterviewHistory(localStorage));
   const [schedules, setSchedules] = useState(() => loadMobileInterviewSchedules(localStorage));

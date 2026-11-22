@@ -8,6 +8,7 @@ export interface ChecklistItem {
 export interface ChecklistSection {
   id: string;
   title: string;
+  priority?: 'high' | 'low';
   items: ChecklistItem[];
 }
 

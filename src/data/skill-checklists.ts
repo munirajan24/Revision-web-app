@@ -7,7 +7,8 @@ const markdownSources = import.meta.glob('../../Files/Checklist/**/*.md', {
 }) as Record<string, string>;
 
 export const seedSkillChecklists: SkillChecklist[] = Object.entries(markdownSources)
-  .filter(([path]) => !/(^|\/)Question bank\//i.test(path))
+  .filter(([path, markdown]) => !/(^|\/)Question bank\//i.test(path)
+    && !(/^#[ \t]+Interview Questions[ \t]*$/im.test(markdown) && !/^[ \t]*-[ \t]*\[[ xX]\][ \t]+.+$/m.test(markdown)))
   .sort(([firstPath], [secondPath]) => firstPath.localeCompare(secondPath))
   .map(([path, markdown]) => {
     const sourceTitle = markdown.match(/^#\s+(.+)$/m)?.[1] ?? getFileTitle(path);
@@ -30,10 +31,12 @@ export function parseChecklistMarkdown(id: string, title: string, markdown: stri
   for (const line of markdown.split(/\r?\n/)) {
     const heading = line.match(/^#{2,3}\s+(.+?)\s*#*\s*$/);
     if (heading) {
+      const priority = /[⭐★]/.test(heading[1]) ? 'high' : undefined;
       const sectionTitle = cleanText(heading[1]);
       currentSection = {
         id: `${id}-section-${sections.length + 1}-${slugify(sectionTitle)}`,
         title: sectionTitle,
+        ...(priority ? { priority } : {}),
         items: [],
       };
       sections.push(currentSection);

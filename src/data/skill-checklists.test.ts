@@ -21,6 +21,7 @@ describe('skill checklist catalog seed', () => {
     const checklist = parseChecklistMarkdown('demo', 'Demo', source);
 
     expect(checklist.sections.map((section) => section.title)).toEqual(['Core', 'Advanced']);
+    expect(checklist.sections[0].priority).toBe('high');
     expect(checklist.sections[0].items).toEqual([
       { id: 'demo-item-001', text: 'val vs var and value class', codeTerms: ['val', 'var'] },
       { id: 'demo-item-002', text: '(not important) Optional topic', priority: 'low' },

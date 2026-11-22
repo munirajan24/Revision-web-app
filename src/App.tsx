@@ -17,8 +17,9 @@ const CompleteRevision = lazy(() => import('./components/CompleteRevision'));
 const SampleInterview = lazy(() => import('./components/SampleInterview'));
 const AndroidConceptPrep = lazy(() => import('./components/AndroidConceptPrep'));
 const AndroidQuickReview = lazy(() => import('./components/AndroidQuickReview'));
+const MobileInterview = lazy(() => import('./components/MobileInterview'));
 
-type View = 'dashboard' | 'questions' | 'practice' | 'keywords' | 'reference' | 'analytics' | 'interviews' | 'complete-revision' | 'sample-interview' | 'android-concepts' | 'android-quick-review' | 'settings';
+type View = 'dashboard' | 'questions' | 'practice' | 'keywords' | 'reference' | 'analytics' | 'interviews' | 'complete-revision' | 'sample-interview' | 'mobile-interview' | 'android-concepts' | 'android-quick-review' | 'settings';
 type AppLanguage = 'kotlin' | 'java';
 type TrainingMode = 'learning' | 'practice';
 type ProgressStatus = 'not_started' | 'learning' | 'practicing' | 'strong' | 'mastered';
@@ -44,6 +45,7 @@ const viewByTab: Record<string, View> = {
   'revision-checklist': 'interviews',
   'complete-revision': 'complete-revision',
   'sample-interview': 'sample-interview',
+  'mobile-interview': 'mobile-interview',
   'android-concepts': 'android-concepts',
   'android-quick-review': 'android-quick-review',
   settings: 'settings',
@@ -59,6 +61,7 @@ const tabByView: Record<View, string> = {
   interviews: 'revision-checklist',
   'complete-revision': 'complete-revision',
   'sample-interview': 'sample-interview',
+  'mobile-interview': 'mobile-interview',
   'android-concepts': 'android-concepts',
   'android-quick-review': 'android-quick-review',
   settings: 'settings',
@@ -701,7 +704,7 @@ export default function App() {
   };
 
   return (
-    <div className="app-shell">
+    <div className={view === 'mobile-interview' ? 'app-shell mobile-interview-app' : 'app-shell'}>
       <aside className="sidebar">
         <div className="brand-block">
           <div className="logo">{activeLanguageText.shortCode}</div>
@@ -755,6 +758,7 @@ export default function App() {
                 ['android-concepts', 'Android concepts'],
                 ['android-quick-review', 'Android quick review'],
                 ['sample-interview', 'Sample interview'],
+                ['mobile-interview', 'Mobile interview'],
               ],
             },
             {
@@ -791,7 +795,7 @@ export default function App() {
         </div>
       </aside>
 
-      <main className="main-panel">
+      <main className={view === 'mobile-interview' ? 'main-panel main-panel-mobile-interview' : 'main-panel'}>
         <header className={view === 'reference' ? 'topbar topbar-reference' : 'topbar'}>
           <div>
             <h1>
@@ -806,6 +810,7 @@ export default function App() {
               {view === 'android-concepts' && 'Android concepts'}
               {view === 'android-quick-review' && 'Android quick review'}
               {view === 'sample-interview' && 'Sample interview'}
+              {view === 'mobile-interview' && 'Mobile interview'}
               {view === 'settings' && 'Settings'}
             </h1>
           </div>
@@ -1495,6 +1500,11 @@ export default function App() {
         {view === 'android-quick-review' && (
           <Suspense fallback={<div className="feature-loading" role="status">Loading quick review…</div>}>
             <AndroidQuickReview />
+          </Suspense>
+        )}
+        {view === 'mobile-interview' && (
+          <Suspense fallback={<div className="feature-loading" role="status">Loading mobile interview…</div>}>
+            <MobileInterview onExit={() => navigateToView('interviews')} />
           </Suspense>
         )}
         {pendingProgressImport && (

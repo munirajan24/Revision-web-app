@@ -1,4 +1,4 @@
-import { interviewQuestions } from './interview-question-bank';
+import { interviewQuestions, type InterviewQuestion } from './interview-question-bank';
 
 export interface MobileBankQuestion {
   id: string;
@@ -18,8 +18,9 @@ export interface MobileQuestionSet {
   sections: Array<{ id: string; title: string; questionCount: number }>;
 }
 
-export function getMobileQuestionBank(): MobileBankQuestion[] {
-  return interviewQuestions.map((question) => {
+export function getMobileQuestionBank(sourceQuestions: InterviewQuestion[] = interviewQuestions): MobileBankQuestion[] {
+  const duplicateIds = new Map<string, number>();
+  return sourceQuestions.map((question) => {
     const [sourceCategory, ...sourceSections] = (question.section || question.category).split(' / ');
     const isInterviewSet = /^Set\s+\d+\s*:/i.test(sourceCategory);
     const setTitle = isInterviewSet ? 'Original interview sets' : getCategoryTitle(sourceCategory);
@@ -27,9 +28,16 @@ export function getMobileQuestionBank(): MobileBankQuestion[] {
       ? [sourceCategory, ...sourceSections].join(' / ')
       : sourceSections.join(' / ') || 'General';
     const setId = `complete-revision:${slug(setTitle)}`;
+    const stableId = `complete-revision:${hashIdentity([
+      question.categoryId,
+      question.section || question.category,
+      normalizeIdentityText(question.prompt),
+    ].join('\0'))}`;
+    const duplicateIndex = duplicateIds.get(stableId) ?? 0;
+    duplicateIds.set(stableId, duplicateIndex + 1);
 
     return {
-      id: question.id,
+      id: duplicateIndex === 0 ? stableId : `${stableId}-${duplicateIndex + 1}`,
       setId,
       setTitle,
       sectionId: `${setId}:${slug(sectionTitle)}`,
@@ -72,4 +80,17 @@ function getCategoryTitle(sourceCategory: string): string {
 
 function slug(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'section';
+}
+
+function normalizeIdentityText(value: string): string {
+  return value.trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+function hashIdentity(value: string): string {
+  let hash = 14695981039346656037n;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= BigInt(value.charCodeAt(index));
+    hash = BigInt.asUintN(64, hash * 1099511628211n);
+  }
+  return hash.toString(16).padStart(16, '0');
 }

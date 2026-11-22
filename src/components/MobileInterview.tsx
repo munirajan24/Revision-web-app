@@ -140,7 +140,8 @@ export default function MobileInterview() {
 
   const currentPrompt = session?.prompts[session.activeIndex];
   const sourceQuestion = currentPrompt
-    ? interviewQuestions.find((question) => question.id === currentPrompt.id)
+    ? interviewQuestions.find((question) => question.prompt === currentPrompt.text
+      && getMobileSectionTitle(question) === currentPrompt.sectionTitle)
     : undefined;
   const answeredCount = session?.prompts.filter((prompt) => prompt.answered).length ?? 0;
   const skippedCount = session?.prompts.filter((prompt) => prompt.skipped).length ?? 0;
@@ -920,6 +921,13 @@ function getLocalDateString(date: Date): string {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+function getMobileSectionTitle(question: (typeof interviewQuestions)[number]): string {
+  const [sourceCategory, ...sourceSections] = (question.section || question.category).split(' / ');
+  return /^Set\s+\d+\s*:/i.test(sourceCategory)
+    ? [sourceCategory, ...sourceSections].join(' / ')
+    : sourceSections.join(' / ') || 'General';
 }
 
 function getCalendarDays(month: Date): Date[] {

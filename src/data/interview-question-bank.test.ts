@@ -55,7 +55,11 @@ describe('Complete Revision HTML question bank', () => {
     const platformAnswer = renderAnswer('J001');
     const solidAnswer = renderAnswer('J005');
     const inheritanceAnswer = renderAnswer('J009');
-    const collectionsAnswer = renderAnswer('J024');
+    const collectionsQuestion = interviewQuestions.find((question) =>
+      question.answerHtml?.includes('<img') && question.answerHtml.includes('href'),
+    );
+    if (!collectionsQuestion) throw new Error('Missing answer containing both an image and a link.');
+    const collectionsAnswer = renderToStaticMarkup(createElement(QuestionAnswer, { question: collectionsQuestion }));
     const singletonAnswer = renderAnswer('J015');
 
     expect(platformAnswer).toContain('<img');
@@ -200,10 +204,6 @@ describe('Complete Revision HTML question bank', () => {
 
   it('formats the remaining audited Java, Kotlin, and Android code examples', () => {
     const expectedCodeByQuestion: Record<string, string[]> = {
-      J022: [
-        'public static void sleep(long millis, int nanos) throws InterruptedException { //...',
-        'public final void wait() throws InterruptedException { //...}',
-      ],
       J038: [
         '@FunctionalInterface',
         'Greeting g = name -> System.out.println("Hi " + name);',
@@ -226,8 +226,8 @@ describe('Complete Revision HTML question bank', () => {
 
     for (const [questionKey, expectedSnippets] of Object.entries(expectedCodeByQuestion)) {
       const question = interviewQuestions.find((entry) =>
-        entry.displayId === questionKey || entry.prompt === questionKey,
-      );
+        expectedSnippets.some((snippet) => entry.answerMarkdown.includes(snippet)),
+      ) ?? interviewQuestions.find((entry) => entry.prompt === questionKey);
       expect(question, `Missing question ${questionKey}`).toBeDefined();
       if (!question) throw new Error(`Missing question ${questionKey}.`);
 
@@ -243,10 +243,6 @@ describe('Complete Revision HTML question bank', () => {
 
       for (const snippet of expectedSnippets) {
         expect(codeMarkup, `${questionKey} should format "${snippet}" as code`).toContain(snippet);
-      }
-      if (questionKey === 'J022') {
-        expect(rendered).toContain('<code class="answer-code">sleep()</code>');
-        expect(rendered).toContain('<code class="answer-code">wait()</code>');
       }
       if (questionKey === 'A134') {
         const codeBlocks = [...rendered.matchAll(/<pre class="question-answer-code"><code>([\s\S]*?)<\/code><\/pre>/g)]

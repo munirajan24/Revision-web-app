@@ -8,16 +8,32 @@ describe('mobile interview question bank', () => {
 
   it('uses the complete revision source questions and answers in source order', () => {
     expect(questions).toHaveLength(interviewQuestions.length);
-    expect(questions.map((question) => question.id)).toEqual(interviewQuestions.map((question) => question.id));
     expect(new Set(questions.map((question) => question.id)).size).toBe(questions.length);
     expect(questions[0]).toMatchObject({
-      id: interviewQuestions[0].id,
       setTitle: 'Java',
       sectionTitle: 'Platform Questions',
       text: interviewQuestions[0].prompt,
       answer: interviewQuestions[0].answerMarkdown,
       source: 'Complete Revision',
     });
+  });
+
+  it('keeps Mobile Interview question IDs stable when another source question is inserted', () => {
+    const targetQuestion = interviewQuestions[20];
+    const insertedQuestion = {
+      ...targetQuestion,
+      id: 'inserted-question',
+      prompt: 'A newly inserted question before an existing question',
+    };
+    const updatedQuestions = getMobileQuestionBank([
+      ...interviewQuestions.slice(0, 10),
+      insertedQuestion,
+      ...interviewQuestions.slice(10),
+    ]);
+    const originalId = questions.find((question) => question.text === targetQuestion.prompt)?.id;
+    const updatedId = updatedQuestions.find((question) => question.text === targetQuestion.prompt)?.id;
+
+    expect(updatedId).toBe(originalId);
   });
 
   it('groups major technologies above their source subsections', () => {

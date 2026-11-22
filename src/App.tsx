@@ -6,6 +6,7 @@ import { getProblemImportanceLabel, normalizeProblemImportanceEntry, problemImpo
 import { indentCodeSelection } from './engine/code-editor';
 import { createAppBackup, mergeInterviewStores, mergeJobApplicationStores, mergeProgressRecords, parseAppBackup, replaceProgressRecords, type AppBackupSection, type ParsedAppBackup } from './engine/app-backup';
 import { loadCompleteRevisionProgress, mergeCompleteRevisionProgress, saveCompleteRevisionProgress } from './engine/complete-revision-progress';
+import { loadMobileInterviewBackup, loadMobileInterviewSession, mergeMobileInterviewBackups, pauseMobileInterviewSession, saveMobileInterviewBackup, saveMobileInterviewSession } from './engine/mobile-interview';
 import type { BackupTheme } from './engine/progress-transfer';
 import InterviewPlanner from './components/InterviewPlanner';
 import ProblemImportanceRating from './components/ProblemImportanceRating';
@@ -31,6 +32,7 @@ const backupSectionLabels: Record<AppBackupSection, string> = {
   completeRevision: 'Complete Revision question progress',
   interviews: 'Interview and checklist data',
   jobApplications: 'Job-application calendar',
+  mobileInterview: 'Mobile interview sessions and history',
 };
 
 const viewByTab: Record<string, View> = {
@@ -255,6 +257,7 @@ export default function App() {
   const initialInterviewStore = useMemo(() => loadInterviewStore(localStorage, seedSkillChecklists), []);
   const initialJobApplicationStore = useMemo(() => loadJobApplicationStore(localStorage), []);
   const [view, setView] = useState<View>(getViewFromUrl);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [activeReferenceSection, setActiveReferenceSection] = useState(syntaxReference[0]?.id ?? '');
   const [theme, setTheme] = useState(initial.theme);
   const [language, setLanguage] = useState<AppLanguage>(initial.language);
@@ -295,6 +298,19 @@ export default function App() {
   const activeLanguageText = languageText[language];
 
   const navigateToView = (nextView: View) => {
+    if (view === 'mobile-interview' && nextView !== 'mobile-interview') {
+      const session = loadMobileInterviewSession(localStorage);
+      if (session?.status === 'running') {
+        if (!window.confirm('Leave Mobile Interview? The current question timer will be paused.')) return;
+        try {
+          saveMobileInterviewSession(localStorage, pauseMobileInterviewSession(session));
+        } catch {
+          window.alert('The interview could not be saved. Stay on this page and try again.');
+          return;
+        }
+      }
+    }
+    setMobileNavOpen(false);
     setView(nextView);
     const url = new URL(window.location.href);
     const tab = tabByView[nextView];
@@ -305,7 +321,10 @@ export default function App() {
   };
 
   useEffect(() => {
-    const handlePopState = () => setView(getViewFromUrl());
+    const handlePopState = () => {
+      setMobileNavOpen(false);
+      setView(getViewFromUrl());
+    };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
@@ -630,6 +649,7 @@ export default function App() {
       completeRevisionProgress: loadCompleteRevisionProgress(localStorage),
       interviews: interviewStore,
       jobApplications: jobApplicationStore,
+      mobileInterview: loadMobileInterviewBackup(localStorage),
     }, exportedAt.toISOString());
     const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -683,6 +703,7 @@ export default function App() {
       if (backup.completeRevisionProgress) saveCompleteRevisionProgress(localStorage, backup.completeRevisionProgress);
       if (backup.interviews) setInterviewStore(backup.interviews);
       if (backup.jobApplications) setJobApplicationStore(backup.jobApplications);
+      if (backup.mobileInterview) saveMobileInterviewBackup(localStorage, backup.mobileInterview);
       setProgressImportStatus(`Replaced backup sections: ${backup.sections.map((section) => backupSectionLabels[section]).join(', ')}.`);
     } else {
       if (backup.coding) {
@@ -697,6 +718,10 @@ export default function App() {
       }
       if (backup.interviews) setInterviewStore((current) => mergeInterviewStores(current, backup.interviews!));
       if (backup.jobApplications) setJobApplicationStore((current) => mergeJobApplicationStores(current, backup.jobApplications!));
+      if (backup.mobileInterview) saveMobileInterviewBackup(localStorage, mergeMobileInterviewBackups(
+        loadMobileInterviewBackup(localStorage),
+        backup.mobileInterview,
+      ));
       setProgressImportStatus(`Merged backup sections: ${backup.sections.map((section) => backupSectionLabels[section]).join(', ')}. Current preferences and schedule were kept.`);
     }
 
@@ -704,7 +729,7 @@ export default function App() {
   };
 
   return (
-    <div className={view === 'mobile-interview' ? 'app-shell mobile-interview-app' : 'app-shell'}>
+    <div className={view === 'mobile-interview' ? `app-shell mobile-interview-app${mobileNavOpen ? ' mobile-nav-open' : ''}` : 'app-shell'}>
       <aside className="sidebar">
         <div className="brand-block">
           <div className="logo">{activeLanguageText.shortCode}</div>
@@ -794,6 +819,14 @@ export default function App() {
           <div className="progressbar"><span style={{ width: `${readyScore}%` }} /></div>
         </div>
       </aside>
+      {mobileNavOpen && (
+        <button
+          type="button"
+          className="mobile-interview-sidebar-backdrop"
+          aria-label="Close navigation"
+          onClick={() => setMobileNavOpen(false)}
+        />
+      )}
 
       <main className={view === 'mobile-interview' ? 'main-panel main-panel-mobile-interview' : 'main-panel'}>
         <header className={view === 'reference' ? 'topbar topbar-reference' : 'topbar'}>
@@ -810,10 +843,23 @@ export default function App() {
               {view === 'android-concepts' && 'Android concepts'}
               {view === 'android-quick-review' && 'Android quick review'}
               {view === 'sample-interview' && 'Sample interview'}
-              {view === 'mobile-interview' && 'Mobile interview'}
+              {view === 'mobile-interview' && 'Mobile Interview'}
               {view === 'settings' && 'Settings'}
             </h1>
           </div>
+          {view === 'mobile-interview' && (
+            <div className="mobile-interview-shell-controls">
+              <button type="button" className="secondary-button mobile-interview-shell-button" onClick={() => navigateToView('dashboard')}>‹ Back</button>
+              <button
+                type="button"
+                className="secondary-button mobile-interview-shell-button mobile-interview-menu-toggle"
+                aria-expanded={mobileNavOpen}
+                onClick={() => setMobileNavOpen((open) => !open)}
+              >
+                ☰ Menu
+              </button>
+            </div>
+          )}
           {(view === 'practice' || view === 'reference') && (
             <div className="topbar-controls">
               {view === 'practice' && (
@@ -1504,7 +1550,7 @@ export default function App() {
         )}
         {view === 'mobile-interview' && (
           <Suspense fallback={<div className="feature-loading" role="status">Loading mobile interview…</div>}>
-            <MobileInterview onExit={() => navigateToView('interviews')} />
+            <MobileInterview />
           </Suspense>
         )}
         {pendingProgressImport && (

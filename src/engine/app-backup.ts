@@ -2,29 +2,32 @@ import { parseCompleteRevisionProgress, type CompleteRevisionProgress } from './
 import { isCalendarDate, type ChecklistItem, type ChecklistSection, type InterviewChecklist, type InterviewRecord, type InterviewStore, type SkillChecklist } from './interviews';
 import { isJobApplicationStore, JOB_APPLICATION_PLATFORMS, type JobApplicationDay, type JobApplicationStore } from './job-applications';
 import { createProgressBackup, mergeProgressRecords, parseProgressBackup, replaceProgressRecords, type ImportedProgressBackup, type ProgressBackupState } from './progress-transfer';
+import { mergeMobileInterviewBackups, parseMobileInterviewBackup, type MobileInterviewBackup } from './mobile-interview';
 
 export interface AppBackupState {
   coding: ProgressBackupState;
   completeRevisionProgress: CompleteRevisionProgress;
   interviews: InterviewStore;
   jobApplications: JobApplicationStore;
+  mobileInterview: MobileInterviewBackup;
 }
 
 export interface AppBackup extends AppBackupState {
-  version: 2;
+  version: 3;
   exportedAt: string;
 }
 
-export type AppBackupSection = 'coding' | 'completeRevision' | 'interviews' | 'jobApplications';
+export type AppBackupSection = 'coding' | 'completeRevision' | 'interviews' | 'jobApplications' | 'mobileInterview';
 
 export interface ParsedAppBackup {
-  version: 1 | 2;
+  version: 1 | 2 | 3;
   exportedAt?: string;
   sections: AppBackupSection[];
   coding?: ImportedProgressBackup;
   completeRevisionProgress?: CompleteRevisionProgress;
   interviews?: InterviewStore;
   jobApplications?: JobApplicationStore;
+  mobileInterview?: MobileInterviewBackup;
 }
 
 export function createAppBackup(state: AppBackupState, exportedAt = new Date().toISOString()): AppBackup {
@@ -32,12 +35,13 @@ export function createAppBackup(state: AppBackupState, exportedAt = new Date().t
   const { version: _version, exportedAt: _codingExportedAt, ...coding } = codingBackup;
 
   return {
-    version: 2,
+    version: 3,
     exportedAt,
     coding,
     completeRevisionProgress: state.completeRevisionProgress,
     interviews: state.interviews,
     jobApplications: state.jobApplications,
+    mobileInterview: state.mobileInterview,
   };
 }
 
@@ -49,26 +53,30 @@ export function parseAppBackup(serialized: string, problemIds: readonly number[]
     return undefined;
   }
 
-  if (!isRecord(parsed) || parsed.version !== 1 && parsed.version !== 2) return undefined;
+  if (!isRecord(parsed) || parsed.version !== 1 && parsed.version !== 2 && parsed.version !== 3) return undefined;
   if (parsed.exportedAt !== undefined && !isValidDate(parsed.exportedAt)) return undefined;
 
-  if (parsed.version === 2) {
+  if (parsed.version === 2 || parsed.version === 3) {
     if (!isValidDate(parsed.exportedAt)) return undefined;
 
     const coding = parseFullCodingBackup(parsed.coding, parsed.exportedAt, problemIds);
     const completeRevisionProgress = parseCompleteRevisionProgress(parsed.completeRevisionProgress);
     const interviews = isValidInterviewStore(parsed.interviews) ? parsed.interviews : undefined;
     const jobApplications = isJobApplicationStore(parsed.jobApplications) ? parsed.jobApplications : undefined;
-    if (!coding || !completeRevisionProgress || !interviews || !jobApplications) return undefined;
+    const mobileInterview = parsed.version === 3 ? parseMobileInterviewBackup(parsed.mobileInterview) : undefined;
+    if (!coding || !completeRevisionProgress || !interviews || !jobApplications || (parsed.version === 3 && !mobileInterview)) return undefined;
+    const sections: AppBackupSection[] = ['coding', 'completeRevision', 'interviews', 'jobApplications'];
+    if (mobileInterview) sections.push('mobileInterview');
 
     return {
-      version: 2,
+      version: parsed.version,
       exportedAt: parsed.exportedAt,
-      sections: ['coding', 'completeRevision', 'interviews', 'jobApplications'],
+      sections,
       coding,
       completeRevisionProgress,
       interviews,
       jobApplications,
+      ...(mobileInterview ? { mobileInterview } : {}),
     };
   }
 

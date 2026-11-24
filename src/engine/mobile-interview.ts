@@ -3,6 +3,7 @@ import { isCalendarDate, type ChecklistItem } from './interviews';
 export type MobileInterviewTrack = 'kotlin' | 'spring-boot' | 'mixed';
 export type MobileInterviewStatus = 'running' | 'paused' | 'finished';
 export type MobileInterviewQuestionKind = 'short-answer' | 'coding' | 'mcq';
+export type MobileCodingLanguage = 'kotlin' | 'java';
 export type MobileInterviewAnswerResult = 'correct' | 'incorrect';
 
 export interface MobileInterviewOption {
@@ -34,6 +35,11 @@ export interface MobileInterviewPrompt {
   answerText?: string;
   selectedOptionId?: string | null;
   answerResult?: MobileInterviewAnswerResult;
+  codingProblemId?: number;
+  codingLanguage?: MobileCodingLanguage;
+  codingAnswers?: Partial<Record<MobileCodingLanguage, string>>;
+  codingStdin?: string;
+  codingProblemCollapsed?: boolean;
 }
 
 export interface TimedMobileInterviewPrompt extends MobileInterviewPrompt {
@@ -69,6 +75,7 @@ export interface MobileInterviewSchedule {
   sectionIds: string[];
   durationMinutes?: number;
   questionTimeLimitSeconds?: number;
+  programQuestionTimeLimitSeconds?: number;
   randomizeQuestions?: boolean;
   status: 'planned' | 'completed';
   createdAt: number;
@@ -89,39 +96,64 @@ export function createMobileInterviewSession(
   track: MobileInterviewTrack,
   durationMinutes: number,
   now = Date.now(),
-  options: { title?: string; setIds?: string[]; scheduleId?: string; untimed?: boolean; questionTimeLimitSeconds?: number } = {},
+  options: {
+    title?: string;
+    setIds?: string[];
+    scheduleId?: string;
+    untimed?: boolean;
+    questionTimeLimitSeconds?: number;
+    programQuestionTimeLimitSeconds?: number;
+  } = {},
 ): MobileInterviewSession {
   if (prompts.length === 0) throw new Error('Choose at least one interview prompt.');
   if (options.questionTimeLimitSeconds !== undefined
     && (!Number.isInteger(options.questionTimeLimitSeconds) || options.questionTimeLimitSeconds <= 0)) {
     throw new Error('Question time limit must be a positive number of seconds.');
   }
+  if (options.programQuestionTimeLimitSeconds !== undefined
+    && (!Number.isInteger(options.programQuestionTimeLimitSeconds) || options.programQuestionTimeLimitSeconds <= 0)) {
+    throw new Error('Program question time limit must be a positive number of seconds.');
+  }
   if (!options.untimed && options.questionTimeLimitSeconds === undefined
     && (!Number.isFinite(durationMinutes) || durationMinutes <= 0)) throw new Error('Session duration must be greater than zero.');
 
-  const durationSeconds = options.untimed
-    ? 0
-    : options.questionTimeLimitSeconds !== undefined
-      ? options.questionTimeLimitSeconds * prompts.length
-      : Math.round(durationMinutes * 60);
   const questionDurationSeconds = options.untimed
     ? 0
-    : options.questionTimeLimitSeconds ?? Math.ceil(durationSeconds / prompts.length);
+    : options.questionTimeLimitSeconds ?? Math.ceil(Math.round(durationMinutes * 60) / prompts.length);
+  const codingQuestionDurationSeconds = 300;
   const sessionPrompts: TimedMobileInterviewPrompt[] = prompts.map((prompt) => ({
     ...prompt,
     referenceItems: prompt.referenceItems.map((item) => ({ ...item })),
-    timeLimitSeconds: questionDurationSeconds,
-    remainingSeconds: questionDurationSeconds,
+    timeLimitSeconds: options.untimed
+      ? 0
+      : prompt.kind === 'coding'
+        ? codingQuestionDurationSeconds
+        : isProgramInterviewPrompt(prompt) && options.programQuestionTimeLimitSeconds !== undefined
+          ? options.programQuestionTimeLimitSeconds
+          : questionDurationSeconds,
+    remainingSeconds: options.untimed
+      ? 0
+      : prompt.kind === 'coding'
+        ? codingQuestionDurationSeconds
+        : isProgramInterviewPrompt(prompt) && options.programQuestionTimeLimitSeconds !== undefined
+          ? options.programQuestionTimeLimitSeconds
+          : questionDurationSeconds,
     timeExpired: false,
   }));
+  const durationSeconds = options.untimed
+    ? 0
+    : options.questionTimeLimitSeconds !== undefined
+      ? sessionPrompts.reduce((total, prompt) => total + prompt.timeLimitSeconds, 0)
+      : Math.round(durationMinutes * 60);
+  const initialQuestionDurationSeconds = sessionPrompts[0].timeLimitSeconds;
   return {
     version: 1,
     id: createId(),
     track,
     durationSeconds,
     questionDurationSeconds,
-    remainingSeconds: questionDurationSeconds,
-    endsAt: options.untimed ? null : now + questionDurationSeconds * 1000,
+    remainingSeconds: initialQuestionDurationSeconds,
+    endsAt: options.untimed ? null : now + initialQuestionDurationSeconds * 1000,
     status: 'running',
     activeIndex: 0,
     prompts: sessionPrompts,
@@ -132,6 +164,41 @@ export function createMobileInterviewSession(
     ...(options.scheduleId ? { scheduleId: options.scheduleId } : {}),
     untimed: options.untimed === true,
   };
+}
+
+export function isProgramInterviewPrompt(
+  prompt: Pick<MobileInterviewPrompt, 'checklistTitle' | 'sectionTitle'>,
+): boolean {
+  return /program/i.test(prompt.checklistTitle) || /program/i.test(prompt.sectionTitle);
+}
+
+export function formatMobileInterviewQaText(
+  session: Pick<MobileInterviewSession, 'title' | 'track' | 'prompts'>,
+): string {
+  const title = session.title ?? `${session.track} interview`;
+  const questionsAndAnswers = session.prompts.map((prompt, index) => {
+    const correctOption = prompt.options?.find((option) => option.id === prompt.correctOptionId)?.text;
+    const referenceAnswer = [
+      ...(correctOption ? [`Correct option: ${correctOption}`] : []),
+      ...(prompt.referenceAnswer ? [prompt.referenceAnswer] : []),
+      ...prompt.referenceItems.map((item) => item.text),
+      ...(prompt.explanation ? [`Explanation: ${prompt.explanation}`] : []),
+    ].join('\n') || 'No reference answer is available.';
+    const selectedOption = prompt.options?.find((option) => option.id === prompt.selectedOptionId)?.text;
+    const userAnswer = prompt.answerText?.trim() || selectedOption || prompt.note.trim() || 'No answer submitted.';
+    return [
+      `Question ${index + 1}${prompt.sectionTitle ? ` — ${prompt.sectionTitle}` : ''}`,
+      prompt.text,
+      '',
+      'Reference answer:',
+      referenceAnswer,
+      '',
+      'Your answer:',
+      userAnswer,
+    ].join('\n');
+  });
+
+  return [`${title} — Questions & Answers`, '', questionsAndAnswers.join('\n\n----------------------------------------\n\n')].join('\n');
 }
 
 export function getMobileInterviewRemainingSeconds(session: MobileInterviewSession, now = Date.now()): number {
@@ -469,6 +536,7 @@ export function parseMobileInterviewSchedule(value: unknown): MobileInterviewSch
     || !value.sectionIds.every((id) => typeof id === 'string')
     || (value.durationMinutes !== undefined && (!Number.isInteger(value.durationMinutes) || typeof value.durationMinutes !== 'number' || value.durationMinutes <= 0))
     || (value.questionTimeLimitSeconds !== undefined && (!Number.isInteger(value.questionTimeLimitSeconds) || typeof value.questionTimeLimitSeconds !== 'number' || value.questionTimeLimitSeconds <= 0))
+    || (value.programQuestionTimeLimitSeconds !== undefined && (!Number.isInteger(value.programQuestionTimeLimitSeconds) || typeof value.programQuestionTimeLimitSeconds !== 'number' || value.programQuestionTimeLimitSeconds <= 0))
     || (value.randomizeQuestions !== undefined && typeof value.randomizeQuestions !== 'boolean')
     || (value.status !== 'planned' && value.status !== 'completed')
     || !isNonNegativeNumber(value.createdAt)
@@ -483,6 +551,7 @@ export function parseMobileInterviewSchedule(value: unknown): MobileInterviewSch
     createdAt: value.createdAt,
     ...(typeof value.durationMinutes === 'number' ? { durationMinutes: value.durationMinutes } : {}),
     ...(typeof value.questionTimeLimitSeconds === 'number' ? { questionTimeLimitSeconds: value.questionTimeLimitSeconds } : {}),
+    ...(typeof value.programQuestionTimeLimitSeconds === 'number' ? { programQuestionTimeLimitSeconds: value.programQuestionTimeLimitSeconds } : {}),
     ...(typeof value.randomizeQuestions === 'boolean' ? { randomizeQuestions: value.randomizeQuestions } : {}),
     ...(typeof value.completedAt === 'number' ? { completedAt: value.completedAt } : {}),
   };
@@ -522,6 +591,14 @@ function parsePrompt(
     || (value.answerText !== undefined && typeof value.answerText !== 'string')
     || (value.selectedOptionId !== undefined && value.selectedOptionId !== null && typeof value.selectedOptionId !== 'string')
     || (value.answerResult !== undefined && value.answerResult !== 'correct' && value.answerResult !== 'incorrect')
+    || (value.codingProblemId !== undefined && (!Number.isInteger(value.codingProblemId) || typeof value.codingProblemId !== 'number' || value.codingProblemId <= 0))
+    || (value.codingLanguage !== undefined && value.codingLanguage !== 'kotlin' && value.codingLanguage !== 'java')
+    || (value.codingAnswers !== undefined && (!isRecord(value.codingAnswers)
+      || Object.entries(value.codingAnswers).some(([language, code]) => (
+        (language !== 'kotlin' && language !== 'java') || typeof code !== 'string'
+      ))))
+    || (value.codingStdin !== undefined && typeof value.codingStdin !== 'string')
+    || (value.codingProblemCollapsed !== undefined && typeof value.codingProblemCollapsed !== 'boolean')
     || (kind === 'mcq' && (!options || options.length < 2 || typeof value.correctOptionId !== 'string'))) return undefined;
   if (kind === 'mcq' && options) {
     const optionIds = options.map((option) => option.id);
@@ -568,6 +645,16 @@ function parsePrompt(
     ...(typeof value.answerText === 'string' ? { answerText: value.answerText } : {}),
     ...(value.selectedOptionId === null || typeof value.selectedOptionId === 'string' ? { selectedOptionId: value.selectedOptionId } : {}),
     ...(value.answerResult === 'correct' || value.answerResult === 'incorrect' ? { answerResult: value.answerResult } : {}),
+    ...(typeof value.codingProblemId === 'number' ? { codingProblemId: value.codingProblemId } : {}),
+    ...(value.codingLanguage === 'kotlin' || value.codingLanguage === 'java' ? { codingLanguage: value.codingLanguage } : {}),
+    ...(isRecord(value.codingAnswers) ? {
+      codingAnswers: {
+        ...(typeof value.codingAnswers.kotlin === 'string' ? { kotlin: value.codingAnswers.kotlin } : {}),
+        ...(typeof value.codingAnswers.java === 'string' ? { java: value.codingAnswers.java } : {}),
+      },
+    } : {}),
+    ...(typeof value.codingStdin === 'string' ? { codingStdin: value.codingStdin } : {}),
+    ...(typeof value.codingProblemCollapsed === 'boolean' ? { codingProblemCollapsed: value.codingProblemCollapsed } : {}),
     timeLimitSeconds,
     remainingSeconds,
     timeExpired,

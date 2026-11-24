@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { interviewQuestions } from './interview-question-bank';
-import { getMobileQuestionBank, getMobileQuestionSets } from './mobile-interview-bank';
+import { getMobileCodingQuestionBank, getMobileQuestionBank, getMobileQuestionSets } from './mobile-interview-bank';
 
 describe('mobile interview question bank', () => {
   const questions = getMobileQuestionBank();
+  const programmingCodingQuestions = questions.filter((question) => question.codingQuestion);
+  const codingQuestions = getMobileCodingQuestionBank();
   const sets = getMobileQuestionSets(questions);
+  const codingSets = getMobileQuestionSets([...questions, ...codingQuestions]);
 
   it('uses the complete revision source questions and answers in source order', () => {
     expect(questions).toHaveLength(interviewQuestions.length);
@@ -53,5 +56,37 @@ describe('mobile interview question bank', () => {
     ), 0);
 
     expect(sectionTotal).toBe(interviewQuestions.length);
+  });
+
+  it('adds Kotlin and Java coding sets from problems with examples and solutions', () => {
+    expect(codingQuestions).toHaveLength(240);
+    expect(codingQuestions.filter((question) => question.setTitle === 'Kotlin Coding')).toHaveLength(120);
+    expect(codingQuestions.filter((question) => question.setTitle === 'Java Coding')).toHaveLength(120);
+    expect(codingQuestions[0]).toMatchObject({
+      sectionTitle: 'Kotlin Coding',
+      codingProblemId: 1,
+      codingLanguage: 'kotlin',
+    });
+    expect(codingSets.find((set) => set.title === 'Kotlin Coding')?.sections[0].questionCount).toBe(120);
+  });
+
+  it('routes the Programming Kotlin and Java coding sections to the coding experience', () => {
+    expect(programmingCodingQuestions).toHaveLength(242);
+    const kotlin = programmingCodingQuestions.find((question) => question.sectionTitle === 'Kotlin basic coding');
+    const java = programmingCodingQuestions.find((question) => question.sectionTitle === 'Java basic coding');
+    const kotlinReverse = programmingCodingQuestions.find((question) => (
+      question.sectionTitle === 'Kotlin basic coding' && question.text.includes('Reverse a String')
+    ));
+
+    expect(kotlin?.codingQuestion).toMatchObject({
+      language: 'kotlin',
+      title: 'Count Unique Elements',
+      examples: [{ input: 'val myList = listOf(1, 2, 3, 2, 3, 4)', output: '4' }],
+    });
+    expect(kotlin?.codingQuestion?.solutions.kotlin[0].code).toContain('myList.distinct().size');
+    expect(kotlin?.codingQuestion?.solutions.java[0].code).toContain('myList');
+    expect(java?.codingQuestion?.language).toBe('java');
+    expect(kotlinReverse?.codingQuestion?.solutions.kotlin.length).toBeGreaterThan(1);
+    expect(kotlinReverse?.codingQuestion?.solutions.java.length).toBeGreaterThan(1);
   });
 });

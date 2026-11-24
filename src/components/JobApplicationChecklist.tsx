@@ -6,6 +6,7 @@ import {
   type JobApplicationStore,
   type JobApplicationTrack,
 } from '../engine/job-applications';
+import { formatAppDateKey } from '../utils/date-format';
 
 interface JobApplicationChecklistProps {
   date: string;
@@ -31,7 +32,7 @@ export default function JobApplicationChecklist({ date, store, onChange }: JobAp
   return (
     <section className="planner-screen job-applications-screen">
       <div className="planner-screen-heading">
-        <div><p className="eyebrow">Job search routine · {date}</p><h2>Job applications</h2></div>
+        <div><p className="eyebrow">Job search routine · {formatAppDateKey(date)}</p><h2>Job applications</h2></div>
         <span className={progress.scheduled ? 'job-due-badge' : 'job-not-due-badge'}>
           {progress.scheduled ? 'Due today' : 'Not scheduled'}
         </span>

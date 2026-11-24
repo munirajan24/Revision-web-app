@@ -1751,6 +1751,97 @@ body[data-theme='light'] .solution-chip.active {
 .mobile-interview-feedback-reference .question-answer-content pre { white-space: pre; }
 .mobile-interview-feedback-reference .question-answer-content > :first-child { margin-top: 0; }
 .mobile-interview-feedback-reference .question-answer-content > :last-child { margin-bottom: 0; }
+.mobile-interview-coding-active { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
+.mobile-interview-coding-active .mobile-interview-controls { bottom: calc(58px + env(safe-area-inset-bottom)); }
+.mobile-interview-coding-active.coding-keyboard-open .mobile-interview-controls { display: none; }
+.mobile-coding-experience { --coding-ink: #e8edf7; --coding-surface: #101827; min-width: 0; padding-bottom: 12px; }
+.mobile-coding-problem { position: relative; z-index: 3; margin-top: 12px; padding: 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--card); box-shadow: var(--shadow); }
+.mobile-coding-problem.is-sticky { position: sticky; top: 0; }
+.mobile-coding-problem > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.mobile-coding-problem h3 { margin: 4px 0 0; font-size: 1rem; line-height: 1.4; overflow-wrap: anywhere; }
+.mobile-coding-eyebrow { color: var(--muted); font-size: 0.68rem; font-weight: 700; }
+.mobile-coding-problem-content { max-height: 36vh; overflow-y: auto; margin-top: 10px; }
+.mobile-coding-problem-content > p { margin: 0 0 10px; color: var(--text); font-size: 0.86rem; line-height: 1.5; }
+.mobile-coding-example { display: grid; gap: 6px; margin-top: 7px; padding: 9px; border-radius: 10px; background: var(--input); }
+.mobile-coding-example > strong { color: var(--muted); font-size: 0.7rem; }
+.mobile-coding-example > div { display: grid; grid-template-columns: 90px minmax(0, 1fr); align-items: center; gap: 8px; min-width: 0; }
+.mobile-coding-example > div > span { color: var(--muted); font-size: 0.7rem; }
+.mobile-coding-example code { display: block; min-width: 0; overflow-x: auto; padding: 5px 7px; border-radius: 6px; background: color-mix(in srgb, var(--success) 12%, var(--input)); color: var(--success); font: 0.73rem/1.45 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre; }
+.mobile-coding-small-button { min-height: 40px; padding: 7px 10px; border: 1px solid var(--border); border-radius: 9px; background: var(--card-strong); color: var(--text); font-size: 0.75rem; font-weight: 700; }
+.mobile-coding-language-switch { display: inline-flex; gap: 3px; padding: 3px; border: 1px solid var(--border); border-radius: 10px; background: var(--input); }
+.mobile-coding-language-switch button { min-width: 70px; min-height: 38px; padding: 6px 11px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); font-size: 0.78rem; font-weight: 700; }
+.mobile-coding-language-switch button.is-selected { background: var(--primary); color: #fff; }
+.mobile-coding-experience > .mobile-coding-language-switch { display: flex; width: max-content; margin: 12px 0 8px; }
+.mobile-coding-editor-shell { min-width: 0; min-height: 180px; max-height: 50vh; overflow: auto; border: 1px solid #29364a; border-radius: 12px; background: var(--coding-surface); color: var(--coding-ink); }
+.mobile-coding-kotlin-editor, .mobile-coding-kotlin-host { position: relative; min-height: 180px; }
+.mobile-coding-kotlin-host > .executable-fragment-wrapper { min-height: 180px; margin: 0; padding: 0; background: var(--coding-surface); }
+.mobile-coding-kotlin-host .run-button, .mobile-coding-kotlin-host .output-wrapper, .mobile-coding-kotlin-host .js-code-output-executor, .mobile-coding-kotlin-host .compiler-info { display: none !important; }
+.mobile-coding-kotlin-host .CodeMirror { height: auto; min-height: 180px; max-height: 50vh; overflow: auto; padding: 10px 0; background: var(--coding-surface); color: var(--coding-ink); font: 13px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; }
+.mobile-coding-kotlin-host .CodeMirror-scroll { min-height: 180px; }
+.mobile-coding-kotlin-host .CodeMirror-gutters { background: #101827; border-right: 1px solid #29364a; }
+.mobile-coding-kotlin-host .CodeMirror-linenumber { color: #7e8ba0; }
+.mobile-coding-editor-loading { margin: 0; padding: 14px; color: #a7b3c5; font: 0.8rem ui-monospace, SFMono-Regular, Consolas, monospace; }
+.mobile-coding-kotlin-placeholder { position: absolute; top: 20px; left: 60px; z-index: 1; color: #8995a8; font: 13px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; pointer-events: none; }
+.mobile-coding-java-editor, .mobile-coding-runner-fallback textarea { display: block; width: 100%; min-width: 100%; min-height: 180px; max-height: 50vh; resize: vertical; overflow: auto; padding: 12px; border: 0; outline: 0; background: var(--coding-surface); color: var(--coding-ink); font: 13px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre; overflow-wrap: normal; tab-size: 4; }
+.mobile-coding-java-editor::placeholder { color: #8995a8; opacity: 1; }
+.mobile-coding-runner-fallback { padding: 10px; }
+.mobile-coding-runner-fallback p { margin: 0 0 8px; color: #ffd18b; font-size: 0.78rem; }
+.mobile-coding-runner-fallback textarea { box-sizing: border-box; }
+.mobile-coding-action-row { display: grid; grid-template-columns: auto auto minmax(90px, 1fr); gap: 7px; margin-top: 9px; }
+.mobile-coding-action-row button { min-height: 42px; padding: 7px 9px; font-size: 0.75rem; }
+.mobile-coding-empty-hint { margin: 5px 0 0; color: var(--muted); font-size: 0.72rem; }
+.mobile-coding-bottom-space { height: 66px; }
+.mobile-coding-symbol-bar { position: fixed; right: 0; bottom: calc(var(--mobile-coding-keyboard-inset, 0px) + env(safe-area-inset-bottom)); left: 0; z-index: 60; display: flex; align-items: center; gap: 5px; min-height: 54px; padding: 6px max(8px, env(safe-area-inset-left)) 6px max(8px, env(safe-area-inset-right)); border-top: 1px solid var(--border); background: color-mix(in srgb, var(--bg) 96%, transparent); box-shadow: 0 -7px 24px rgb(0 0 0 / 20%); backdrop-filter: blur(14px); }
+.mobile-coding-symbol-scroll { display: flex; flex: 1 1 auto; gap: 5px; min-width: 0; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; }
+.mobile-coding-symbol-scroll button, .mobile-coding-run-button { flex: 0 0 auto; min-width: 40px; min-height: 40px; padding: 5px 9px; border: 1px solid var(--border); border-radius: 9px; background: var(--card); color: var(--text); font: 0.85rem ui-monospace, SFMono-Regular, Consolas, monospace; touch-action: manipulation; }
+.mobile-coding-symbol-scroll button:focus-visible, .mobile-coding-run-button:focus-visible, .mobile-coding-small-button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.mobile-coding-run-button { display: inline-flex; min-width: 72px; align-items: center; justify-content: center; gap: 5px; border-color: var(--primary); background: var(--primary); color: #fff; font: 700 0.78rem system-ui, sans-serif; }
+.mobile-coding-run-button:disabled { cursor: not-allowed; opacity: 0.55; }
+.mobile-coding-run-button.is-stop { border-color: var(--danger); background: var(--danger); }
+.mobile-coding-spinner { width: 14px; height: 14px; border: 2px solid rgb(255 255 255 / 45%); border-top-color: #fff; border-radius: 50%; animation: mobile-coding-spin 700ms linear infinite; }
+@keyframes mobile-coding-spin { to { transform: rotate(360deg); } }
+.mobile-coding-output-drawer { position: fixed; right: 0; bottom: calc(var(--mobile-coding-keyboard-inset, 0px) + 56px + env(safe-area-inset-bottom)); left: 0; z-index: 55; display: grid; gap: 8px; max-height: min(45dvh, 360px); overflow: auto; padding: 12px; border: 1px solid #344258; border-radius: 14px 14px 0 0; background: #101827; color: #e8edf7; box-shadow: 0 -10px 34px rgb(0 0 0 / 35%); }
+.mobile-coding-output-drawer > header { position: sticky; top: -12px; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 9px; margin: -12px -12px 0; padding: 10px 12px; border-bottom: 1px solid #29364a; background: #101827; }
+.mobile-coding-output-drawer > header > div { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; }
+.mobile-coding-status { color: #afbdd0; font-size: 0.74rem; }
+.mobile-coding-status.is-success { color: #66d99a; }
+.mobile-coding-status.is-compile-error, .mobile-coding-status.is-runtime-error, .mobile-coding-status.is-timed-out { color: #ff8e97; }
+.mobile-coding-result-message { margin: 0; color: #c5d0df; font-size: 0.8rem; }
+.mobile-coding-output-text, .mobile-coding-stderr { max-height: 150px; overflow: auto; margin: 0; padding: 9px; border-radius: 8px; background: #0b111c; color: #dce5f2; font: 0.75rem/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.mobile-coding-stderr { color: #ff969d; }
+.mobile-coding-stdin { display: grid; gap: 5px; color: #b7c3d4; font-size: 0.73rem; }
+.mobile-coding-stdin textarea { min-height: 48px; max-height: 90px; resize: vertical; padding: 8px; border: 1px solid #344258; border-radius: 7px; background: #0b111c; color: #e8edf7; font: 0.75rem/1.45 ui-monospace, SFMono-Regular, Consolas, monospace; }
+.mobile-coding-expected-check { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; color: #ffd18b; font-size: 0.75rem; }
+.mobile-coding-expected-check > strong { grid-column: 1 / -1; }
+.mobile-coding-expected-check.is-match { color: #66d99a; }
+.mobile-coding-expected-check > div { display: grid; gap: 4px; min-width: 0; color: #aab6c8; }
+.mobile-coding-expected-check code { overflow: auto; padding: 6px; border-radius: 6px; background: #0b111c; color: #e8edf7; font: 0.7rem/1.4 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre; }
+.mobile-coding-answer-overlay { position: fixed; inset: 0; z-index: 80; display: flex; align-items: flex-end; justify-content: center; background: rgb(0 0 0 / 62%); backdrop-filter: blur(4px); }
+.mobile-coding-answer-sheet { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; width: min(100%, 760px); height: min(90dvh, 900px); overflow: hidden; border: 1px solid var(--border); border-radius: 18px 18px 0 0; background: var(--card); box-shadow: var(--shadow); }
+.mobile-coding-answer-header { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px; border-bottom: 1px solid var(--border); background: var(--card); }
+.mobile-coding-answer-header h2 { margin: 3px 0 0; font-size: 0.98rem; }
+.mobile-coding-answer-header .mobile-coding-language-switch { flex: 0 0 auto; }
+.mobile-coding-answer-header .mobile-coding-language-switch button { min-width: 58px; padding-right: 7px; padding-left: 7px; }
+.mobile-coding-answer-content { min-height: 0; overflow-y: auto; padding: 12px; }
+.mobile-coding-solution-chips { display: flex; gap: 7px; overflow-x: auto; padding-bottom: 9px; }
+.mobile-coding-solution-chips button { flex: 0 0 auto; min-height: 40px; padding: 7px 11px; border: 1px solid var(--border); border-radius: 999px; background: var(--input); color: var(--text); font-size: 0.75rem; }
+.mobile-coding-solution-chips button.is-selected { border-color: var(--primary); color: var(--primary); }
+.mobile-coding-answer-code { position: relative; overflow: hidden; border: 1px solid #29364a; border-radius: 12px; background: #101827; }
+.mobile-coding-answer-code > button { position: absolute; top: 7px; right: 7px; z-index: 1; }
+.mobile-coding-answer-code pre { max-height: 48vh; overflow: auto; margin: 0; padding: 44px 12px 12px; color: #e8edf7; font: 12px/1.55 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre; }
+.mobile-coding-copy-notice { margin: 5px 0; color: var(--muted); font-size: 0.74rem; }
+.mobile-coding-complexity { display: flex; flex-wrap: wrap; gap: 7px; margin: 8px 0 14px; }
+.mobile-coding-complexity span { padding: 5px 8px; border-radius: 999px; background: var(--input); color: var(--muted); font-size: 0.69rem; }
+.mobile-coding-your-answer { border: 1px solid var(--border); border-radius: 10px; background: var(--input); }
+.mobile-coding-your-answer summary { min-height: 42px; padding: 11px; color: var(--text); font-size: 0.8rem; font-weight: 700; cursor: pointer; }
+.mobile-coding-your-answer pre { max-height: 180px; overflow: auto; margin: 0; padding: 10px; color: var(--muted); font: 0.75rem/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre; }
+.mobile-coding-try-solution { width: 100%; min-height: 42px; margin-top: 12px; }
+.mobile-coding-answer-footer { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); border-top: 1px solid var(--border); background: var(--card); }
+.mobile-coding-answer-footer button { min-height: 42px; }
+.mobile-coding-error { margin: 14px 0; padding: 16px; border: 1px solid color-mix(in srgb, var(--danger) 45%, var(--border)); border-radius: 12px; background: var(--card); }
+.mobile-coding-error h3 { margin: 0 0 6px; font-size: 0.95rem; }
+.mobile-coding-error p { color: var(--muted); font-size: 0.82rem; }
+.mobile-coding-experience.is-answer-open .mobile-coding-symbol-bar { display: none; }
 @keyframes mobile-feedback-enter { from { opacity: 0; transform: translateY(10px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
 .mobile-interview-section-progress { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; margin: 16px 0 10px; color: var(--muted); font-size: 0.77rem; }
 .mobile-interview-section-progress strong { color: var(--primary); white-space: nowrap; }
@@ -1798,6 +1889,9 @@ body[data-theme='light'] .solution-chip.active {
 .mobile-interview-recap-card { margin-top: 17px; }
 .mobile-interview-recap-card h3 { margin: 5px 0 14px; font-size: 1.3rem; }
 .mobile-interview-recap-card > p:last-child { margin-bottom: 0; color: var(--muted); font-size: 0.82rem; }
+.mobile-interview-qa-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.mobile-interview-qa-actions button { min-height: 40px; padding: 8px 12px; font-size: 0.79rem; }
+.mobile-interview-recap-card .mobile-interview-qa-notice { min-height: 1em; margin: 7px 0 0; color: var(--muted); font-size: 0.74rem; }
 .mobile-interview-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .mobile-interview-stats > div { display: grid; gap: 3px; }
 .mobile-interview-stats strong { font-size: 1.12rem; font-variant-numeric: tabular-nums; }
@@ -1864,8 +1958,9 @@ body[data-theme='light'] .solution-chip.active {
 
 @media (max-width: 380px) {
   .mobile-interview-app .main-panel-mobile-interview { padding-right: 12px; padding-left: 12px; }
+  .mobile-interview-app .main-panel-mobile-interview > .topbar { margin-right: -12px; margin-left: -12px; padding-right: 12px; padding-left: 12px; }
   .mobile-interview-setup-card, .mobile-interview-prompt, .mobile-interview-recap-card { padding: 15px; }
-  .mobile-interview-controls { width: calc(100% + 24px); margin-right: -12px; margin-left: -12px; padding-right: 12px; padding-left: 12px; }
+  .mobile-interview-app .mobile-interview-controls { width: calc(100% + 24px); margin-right: -12px; margin-left: -12px; padding-right: 12px; padding-left: 12px; }
   .catalog-segment-edit-actions button[aria-label="Cancel changes"]::before { content: '\00d7'; font-size: 1.15rem; }
   .catalog-segment-edit-actions button[aria-label="Save changes"]::before { content: '\2713'; font-size: 0.95rem; }
 }
@@ -1913,12 +2008,21 @@ body[data-theme='light'] .solution-chip.active {
 .mobile-interview-schedule-actions .primary-button { min-height: 38px; padding: 7px 10px; font-size: 0.77rem; }
 .mobile-interview-schedule-field { display: grid; gap: 6px; margin-top: 12px; color: var(--muted); font-size: 0.79rem; }
 .mobile-interview-schedule-field input, .mobile-interview-schedule-field select { width: 100%; }
-.mobile-interview-time-control { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: center; gap: 8px; width: min(100%, 260px); padding: 6px; border: 1px solid var(--border); border-radius: 12px; background: var(--input); }
-.mobile-interview-time-step { display: grid; width: 42px; height: 42px; place-items: center; padding: 0; border: 1px solid var(--border); border-radius: 9px; background: var(--card); color: var(--text); transition: border-color 120ms ease, background 120ms ease, color 120ms ease; }
-.mobile-interview-time-step:hover:not(:disabled) { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 10%, var(--card)); color: var(--primary); }
-.mobile-interview-time-step:disabled { cursor: not-allowed; opacity: 0.45; }
-.mobile-interview-time-step svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-width: 2; }
-.mobile-interview-time-value { color: var(--text); font-size: 0.92rem; font-variant-numeric: tabular-nums; font-weight: 700; text-align: center; }
+.mobile-interview-time-picker-trigger { display: flex; width: min(100%, 320px); min-height: 48px; align-items: center; justify-content: space-between; padding: 0 14px; border: 1px solid var(--border); border-radius: 11px; background: var(--input); color: var(--text); text-align: left; }
+.mobile-interview-time-picker-trigger strong { font-size: 0.92rem; font-variant-numeric: tabular-nums; }
+.mobile-interview-time-picker-trigger > span { color: var(--muted); font-size: 1.15rem; }
+.mobile-interview-time-picker-backdrop { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 16px; background: rgb(0 0 0 / 62%); backdrop-filter: blur(5px); }
+.mobile-interview-time-picker-dialog { display: grid; width: min(100%, 360px); gap: 14px; padding: 18px; border: 1px solid var(--border); border-radius: 18px; background: var(--bg); box-shadow: var(--shadow); }
+.mobile-interview-time-picker-dialog > header { color: var(--text); font-size: 0.95rem; }
+.mobile-interview-time-picker-wheel-wrap { position: relative; overflow: hidden; border-radius: 12px; background: var(--input); }
+.mobile-interview-time-picker-selection { position: absolute; top: 88px; right: 0; left: 0; height: 44px; border-top: 1px solid color-mix(in srgb, var(--primary) 45%, var(--border)); border-bottom: 1px solid color-mix(in srgb, var(--primary) 45%, var(--border)); background: color-mix(in srgb, var(--primary) 9%, transparent); pointer-events: none; }
+.mobile-interview-time-picker-wheel { position: relative; height: 220px; overflow-y: auto; overscroll-behavior: contain; scroll-snap-type: y mandatory; scrollbar-width: none; outline-offset: -2px; }
+.mobile-interview-time-picker-wheel::-webkit-scrollbar { display: none; }
+.mobile-interview-time-picker-spacer { height: 88px; }
+.mobile-interview-time-picker-option { display: grid; height: 44px; place-items: center; color: var(--muted); font-size: 0.88rem; font-variant-numeric: tabular-nums; scroll-snap-align: center; scroll-snap-stop: always; user-select: none; }
+.mobile-interview-time-picker-option.selected { color: var(--primary); font-size: 1rem; font-weight: 800; }
+.mobile-interview-time-picker-dialog > footer { display: flex; justify-content: flex-end; gap: 8px; }
+.mobile-interview-time-picker-dialog > footer button { min-width: 84px; min-height: 40px; }
 .mobile-interview-library-list article { margin-top: 10px; }
 .mobile-interview-library-list article > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .mobile-interview-library-list article > header h3 { margin: 0 0 4px; font-size: 0.98rem; }

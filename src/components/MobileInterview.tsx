@@ -1,13 +1,17 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react';
 import QuestionAnswer from './QuestionAnswer';
+import CodingInterviewExperience, { CodingInterviewErrorBoundary } from './CodingInterviewExperience';
 import { interviewQuestions } from '../data/interview-question-bank';
-import { getMobileQuestionBank, getMobileQuestionSets, type MobileBankQuestion } from '../data/mobile-interview-bank';
+import { getMobileCodingQuestionBank, getMobileQuestionBank, getMobileQuestionSets, type MobileBankQuestion } from '../data/mobile-interview-bank';
+import { formatAppDate, formatAppDateKey, formatAppDateTime, formatAppFileDateTime } from '../utils/date-format';
 import {
   createMobileInterviewSession,
   expireMobileInterviewPrompt,
   finishMobileInterviewSession,
+  formatMobileInterviewQaText,
   getMobileInterviewRemainingSeconds,
+  isProgramInterviewPrompt,
   loadMobileInterviewHistory,
   loadMobileInterviewSchedules,
   loadMobileInterviewSession,
@@ -25,16 +29,14 @@ import {
 
 type MobileInterviewScreen = 'home' | 'practice' | 'sets' | 'history' | 'session' | 'recap';
 
-const MIN_QUESTION_TIME_SECONDS = 10;
-const MAX_QUESTION_TIME_SECONDS = 600;
-const QUESTION_TIME_STEP_SECONDS = 10;
+const QUESTION_TIME_OPTIONS = [30, ...Array.from({ length: 30 }, (_, index) => (index + 1) * 60)];
 
 export default function MobileInterview() {
   const [session, setSession] = useState<MobileInterviewSession | null>(() => loadMobileInterviewSession(localStorage));
   const [screen, setScreen] = useState<MobileInterviewScreen>('home');
   const [importantOnly, setImportantOnly] = useState(false);
   const [storageError, setStorageError] = useState('');
-  const [questionBank] = useState(() => getMobileQuestionBank());
+  const [questionBank] = useState(() => [...getMobileQuestionBank(), ...getMobileCodingQuestionBank()]);
   const [questionSets] = useState(() => getMobileQuestionSets(questionBank));
   const [selectedSetIds, setSelectedSetIds] = useState<string[]>([]);
   const [selectedSectionIds, setSelectedSectionIds] = useState<string[]>([]);
@@ -46,10 +48,12 @@ export default function MobileInterview() {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
-  const [questionTimeLimitSeconds, setQuestionTimeLimitSeconds] = useState(90);
+  const [questionTimeLimitSeconds, setQuestionTimeLimitSeconds] = useState(120);
+  const [programQuestionTimeLimitSeconds, setProgramQuestionTimeLimitSeconds] = useState(900);
   const [clockNow, setClockNow] = useState(() => Date.now());
   const [showHistory, setShowHistory] = useState(false);
   const [copyNotice, setCopyNotice] = useState('');
+  const [codingKeyboardOpen, setCodingKeyboardOpen] = useState(false);
   const longPressTimer = useRef<number | null>(null);
   const longPressOrigin = useRef<{ x: number; y: number } | null>(null);
   const longPressPointerType = useRef('');
@@ -74,7 +78,41 @@ export default function MobileInterview() {
     selectedSectionIds,
   ),
   [questionBank, selectedSectionIds, selectedSetIds]);
+  const hasProgramQuestions = availablePrompts.some(isProgramInterviewPrompt);
   const calendarDays = useMemo(() => getCalendarDays(calendarMonth), [calendarMonth]);
+
+  useEffect(() => {
+    setSession((current) => {
+      if (!current) return current;
+      let changed = false;
+      const prompts = current.prompts.map((prompt) => {
+        const codingQuestion = questionBank.find((question) => question.id === prompt.id)?.codingQuestion;
+        if (!codingQuestion || prompt.kind === 'coding') return prompt;
+        changed = true;
+        const shouldResetTimer = !current.untimed && !prompt.answered && !prompt.skipped && !prompt.timeExpired;
+        const duration = shouldResetTimer ? 300 : prompt.timeLimitSeconds;
+        return {
+          ...prompt,
+          kind: 'coding' as const,
+          codingLanguage: codingQuestion.language,
+          sectionTitle: `${codingQuestion.language === 'kotlin' ? 'Kotlin' : 'Java'} Coding`,
+          timeLimitSeconds: duration,
+          remainingSeconds: shouldResetTimer ? duration : prompt.remainingSeconds,
+        };
+      });
+      if (!changed) return current;
+      const activePrompt = prompts[current.activeIndex];
+      return {
+        ...current,
+        prompts,
+        durationSeconds: current.untimed ? 0 : prompts.reduce((total, prompt) => total + prompt.timeLimitSeconds, 0),
+        remainingSeconds: activePrompt.remainingSeconds,
+        endsAt: current.status === 'running' && !current.untimed
+          ? Date.now() + activePrompt.remainingSeconds * 1000
+          : null,
+      };
+    });
+  }, [questionBank]);
 
   useEffect(() => {
     try {
@@ -95,6 +133,12 @@ export default function MobileInterview() {
         : schedule));
     }
   }, [session]);
+
+  useEffect(() => {
+    if (screen === 'session' && session?.status === 'running' && !session.untimed) {
+      setClockNow(Date.now());
+    }
+  }, [screen, session?.status, session?.endsAt, session?.activeIndex, session?.untimed]);
 
   useEffect(() => {
     if (screen !== 'session' || !session || session.status !== 'running' || session.untimed) return undefined;
@@ -173,10 +217,12 @@ export default function MobileInterview() {
     const shouldRandomize = schedule?.randomizeQuestions ?? randomizeQuestionOrder;
     const orderedPrompts = shouldRandomize ? shufflePrompts(prompts) : prompts;
     const timeLimit = schedule?.questionTimeLimitSeconds ?? questionTimeLimitSeconds;
+    const programTimeLimit = schedule?.programQuestionTimeLimitSeconds ?? programQuestionTimeLimitSeconds;
     setSession(createMobileInterviewSession(orderedPrompts, selectedSetsForSession.length > 1 ? 'mixed' : inferTrack(selectedSetsForSession[0]?.title), 0, Date.now(), {
       title,
       setIds,
       questionTimeLimitSeconds: timeLimit,
+      programQuestionTimeLimitSeconds: programTimeLimit,
       ...(schedule ? { scheduleId: schedule.id } : {}),
     }));
     setImportantOnly(false);
@@ -184,12 +230,12 @@ export default function MobileInterview() {
     setScreen('session');
   };
 
-  const updatePrompt = (promptId: string, update: Partial<MobileInterviewPrompt>) => {
+  const updatePrompt = useCallback((promptId: string, update: Partial<MobileInterviewPrompt>) => {
     setSession((current) => current && ({
       ...current,
       prompts: current.prompts.map((prompt) => prompt.id === promptId ? { ...prompt, ...update } : prompt),
     }));
-  };
+  }, []);
 
   const submitAnswer = () => {
     if (!session || !currentPrompt || session.status !== 'running') return;
@@ -204,7 +250,12 @@ export default function MobileInterview() {
         : prompt),
     };
     setSession(pauseMobileInterviewSession(answeredSession, now));
-    setFeedback({ promptId: currentPrompt.id, result, reveal: false, answerViewed: false });
+    setFeedback({
+      promptId: currentPrompt.id,
+      result,
+      reveal: false,
+      answerViewed: currentPrompt.kind === 'coding',
+    });
   };
 
   const advanceAfterFeedback = useCallback((promptId: string) => {
@@ -220,11 +271,31 @@ export default function MobileInterview() {
     if (feedback) advanceAfterFeedback(feedback.promptId);
   };
 
+  const hideCodingAnswer = () => {
+    setFeedback(null);
+    setSession((current) => current && current.status === 'paused'
+      ? resumeMobileInterviewSession(current)
+      : current);
+  };
+
+  const tryCodingSolution = (code: string) => {
+    if (!currentPrompt) return;
+    const language = currentPrompt.codingLanguage ?? 'kotlin';
+    updatePrompt(currentPrompt.id, {
+      codingAnswers: { ...currentPrompt.codingAnswers, [language]: code },
+    });
+    hideCodingAnswer();
+  };
+
+  const onCodingKeyboardVisibilityChange = useCallback((visible: boolean) => {
+    setCodingKeyboardOpen(visible);
+  }, []);
+
   useEffect(() => {
-    if (!feedback || feedback.answerViewed) return undefined;
+    if (!feedback || feedback.answerViewed || currentPrompt?.kind === 'coding') return undefined;
     const timeout = window.setTimeout(() => advanceAfterFeedback(feedback.promptId), 3000);
     return () => window.clearTimeout(timeout);
-  }, [feedback?.promptId, feedback?.answerViewed, advanceAfterFeedback]);
+  }, [feedback?.promptId, feedback?.answerViewed, currentPrompt?.kind, advanceAfterFeedback]);
 
   const moveTo = (index: number) => {
     if (!session) return;
@@ -298,6 +369,39 @@ export default function MobileInterview() {
       setCopyNotice('Question copied');
     } catch {
       setCopyNotice('Could not copy. Check clipboard permissions and try again.');
+    }
+  };
+
+  const copyAllQa = async () => {
+    if (!session) return;
+    try {
+      await navigator.clipboard.writeText(formatMobileInterviewQaText(session));
+      setCopyNotice('All Q&A copied');
+    } catch {
+      setCopyNotice('Could not copy all Q&A. Check clipboard permissions and try again.');
+    }
+  };
+
+  const downloadAllQa = () => {
+    if (!session) return;
+    try {
+      const blob = new Blob([formatMobileInterviewQaText(session)], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      const safeTitle = (session.title ?? trackLabel(session.track))
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '') || 'interview';
+      const completedAt = new Date(session.finishedAt ?? session.startedAt);
+      anchor.href = url;
+      anchor.download = `${safeTitle}-qa ${formatAppFileDateTime(completedAt)}.txt`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setCopyNotice('Q&A downloaded as a text file');
+    } catch {
+      setCopyNotice('Could not download Q&A. Please try again.');
     }
   };
 
@@ -378,32 +482,12 @@ export default function MobileInterview() {
   );
 
   const renderQuestionTimeSelector = () => (
-    <div className="mobile-interview-schedule-field">
-      <span id="mobile-interview-time-label">Time per question</span>
-      <div className="mobile-interview-time-control" role="group" aria-labelledby="mobile-interview-time-label">
-        <button
-          type="button"
-          className="mobile-interview-time-step"
-          aria-label="Decrease time by 10 seconds"
-          disabled={questionTimeLimitSeconds <= MIN_QUESTION_TIME_SECONDS}
-          onClick={() => setQuestionTimeLimitSeconds((seconds) => Math.max(MIN_QUESTION_TIME_SECONDS, seconds - QUESTION_TIME_STEP_SECONDS))}
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14" /></svg>
-        </button>
-        <output className="mobile-interview-time-value" aria-live="polite">
-          {formatQuestionTime(questionTimeLimitSeconds)}
-        </output>
-        <button
-          type="button"
-          className="mobile-interview-time-step"
-          aria-label="Increase time by 10 seconds"
-          disabled={questionTimeLimitSeconds >= MAX_QUESTION_TIME_SECONDS}
-          onClick={() => setQuestionTimeLimitSeconds((seconds) => Math.min(MAX_QUESTION_TIME_SECONDS, seconds + QUESTION_TIME_STEP_SECONDS))}
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
-        </button>
-      </div>
-    </div>
+    <>
+      <TimeWheelPicker label="Time per question" value={questionTimeLimitSeconds} onChange={setQuestionTimeLimitSeconds} />
+      {hasProgramQuestions && (
+        <TimeWheelPicker label="Time per program question" value={programQuestionTimeLimitSeconds} onChange={setProgramQuestionTimeLimitSeconds} />
+      )}
+    </>
   );
 
   const renderCalendar = () => {
@@ -436,7 +520,7 @@ export default function MobileInterview() {
                 dateKey === selectedDate ? 'selected' : '',
                 dateKey === getLocalDateString(new Date()) ? 'today' : '',
               ].filter(Boolean).join(' ');
-              return <button key={dateKey} type="button" className={classes} aria-pressed={dateKey === selectedDate} aria-label={`${date.toLocaleDateString()}${count ? `, ${count} interviews` : ''}`} onClick={() => {
+              return <button key={dateKey} type="button" className={classes} aria-pressed={dateKey === selectedDate} aria-label={`${formatAppDate(date)}${count ? `, ${count} interviews` : ''}`} onClick={() => {
                 setSelectedDate(dateKey);
                 if (date.getMonth() !== calendarMonth.getMonth() || date.getFullYear() !== calendarMonth.getFullYear()) {
                   setCalendarMonth(new Date(date.getFullYear(), date.getMonth(), 1));
@@ -541,7 +625,7 @@ export default function MobileInterview() {
             const answered = entry.prompts.filter((prompt) => prompt.answered).length;
             const skipped = entry.prompts.filter((prompt) => prompt.skipped).length;
             return <li key={entry.id}><details>
-              <summary><span><strong>{entry.title ?? `${trackLabel(entry.track)} interview`}</strong><small>{entry.finishedAt ? new Date(entry.finishedAt).toLocaleString() : new Date(entry.startedAt).toLocaleString()} · {entry.prompts.length} questions</small></span><b>{answered} answered · {skipped} skipped</b></summary>
+              <summary><span><strong>{entry.title ?? `${trackLabel(entry.track)} interview`}</strong><small>{formatAppDateTime(new Date(entry.finishedAt ?? entry.startedAt))} · {entry.prompts.length} questions</small></span><b>{answered} answered · {skipped} skipped</b></summary>
               <ol>{entry.prompts.map((prompt) => <li key={prompt.id}><strong>{prompt.text.split('\n')[0]}</strong>
                 <span>{prompt.answerResult === 'correct' ? 'Correct' : prompt.answerResult === 'incorrect' ? 'Review' : prompt.timeExpired ? 'Timed out' : prompt.skipped ? 'Skipped' : prompt.answered ? 'Submitted' : 'Not answered'}</span>
                 {(prompt.answerText || prompt.note) && <p>Your answer: {prompt.answerText || prompt.note}</p>}</li>)}</ol>
@@ -574,7 +658,7 @@ export default function MobileInterview() {
             return (
               <li key={entry.id}>
                 <details>
-                  <summary><span><strong>{entry.title ?? `${trackLabel(entry.track)} interview`}</strong><small>{entry.status !== 'finished' ? 'In progress · ' : ''}{entry.finishedAt ? new Date(entry.finishedAt).toLocaleString() : new Date(entry.startedAt).toLocaleString()} · {entry.prompts.length} questions</small></span><b>{answered} answered · {skipped} skipped</b></summary>
+                  <summary><span><strong>{entry.title ?? `${trackLabel(entry.track)} interview`}</strong><small>{entry.status !== 'finished' ? 'In progress · ' : ''}{formatAppDateTime(new Date(entry.finishedAt ?? entry.startedAt))} · {entry.prompts.length} questions</small></span><b>{answered} answered · {skipped} skipped</b></summary>
                   <ol>{entry.prompts.map((prompt) => (
                     <li key={prompt.id}>
                       <strong>{prompt.text.split('\n')[0]}</strong>
@@ -601,7 +685,7 @@ export default function MobileInterview() {
           <button className="mobile-interview-text-button" type="button" onClick={() => setShowHistory(true)}>History</button>
         </header>
         <section className="mobile-interview-recap-card">
-          <p className="mobile-interview-kicker">{session.finishedAt ? new Date(session.finishedAt).toLocaleString() : 'Completed'}</p>
+          <p className="mobile-interview-kicker">{session.finishedAt ? formatAppDateTime(new Date(session.finishedAt)) : 'Completed'}</p>
           <h3>Interview recap</h3>
           <div className="mobile-interview-stats">
             <div><strong>{getSessionSections(session).length}</strong><span>sections</span></div>
@@ -610,6 +694,11 @@ export default function MobileInterview() {
             <div><strong>{revealedCount}</strong><span>references</span></div>
           </div>
           <p>{session.prompts.length} questions · {importantCount} marked important</p>
+          <div className="mobile-interview-qa-actions">
+            <button type="button" className="secondary-button" onClick={() => void copyAllQa()}>Copy all Q&amp;A</button>
+            <button type="button" className="secondary-button" onClick={downloadAllQa}>Download .txt</button>
+          </div>
+          <p className="mobile-interview-qa-notice" role="status" aria-live="polite">{copyNotice}</p>
         </section>
         <div className="mobile-interview-recap-heading">
           <div><span className="mobile-interview-kicker">Review</span><h3>{importantOnly ? 'Important questions' : 'Interview questions'}</h3></div>
@@ -647,8 +736,19 @@ export default function MobileInterview() {
   if (session && currentPrompt && screen === 'session') {
     const sectionIds = getSessionSections(session);
     const currentSectionIndex = sectionIds.indexOf(currentPrompt.sectionId);
+    const bankQuestion = questionBank.find((question) => question.id === currentPrompt.id);
+    const codingActive = currentPrompt.kind === 'coding'
+      && (currentPrompt.codingProblemId !== undefined || bankQuestion?.codingQuestion !== undefined);
+    const codingPrompt = codingActive && bankQuestion?.codingQuestion
+      ? {
+          ...currentPrompt,
+          kind: 'coding' as const,
+          codingLanguage: currentPrompt.codingLanguage ?? bankQuestion.codingQuestion.language,
+          sectionTitle: `${bankQuestion.codingQuestion.language === 'kotlin' ? 'Kotlin' : 'Java'} Coding`,
+        }
+      : currentPrompt;
     return (
-      <section className="mobile-interview mobile-interview-active">
+      <section className={`mobile-interview mobile-interview-active${codingActive ? ' mobile-interview-coding-active' : ''}${codingActive && codingKeyboardOpen ? ' coding-keyboard-open' : ''}`}>
         <header className="mobile-interview-top">
           <button className="mobile-interview-back" type="button" onClick={exitSession} aria-label="Pause and return to Mobile Interview home">‹</button>
           <div><span className="mobile-interview-kicker">{session.title ?? `${trackLabel(session.track)} interview`}</span><h2>{currentPrompt.sectionTitle}</h2></div>
@@ -679,11 +779,11 @@ export default function MobileInterview() {
         </div>
         {!session.untimed && (() => {
           const remainingSeconds = getMobileInterviewRemainingSeconds(session, clockNow);
-          const timePercent = Math.max(0, Math.min(100, remainingSeconds / session.questionDurationSeconds * 100));
+          const timePercent = Math.max(0, Math.min(100, remainingSeconds / currentPrompt.timeLimitSeconds * 100));
           return (
             <div className={`mobile-interview-question-timer${remainingSeconds <= 10 ? ' is-low' : ''}`} aria-label="Time remaining">
               <div><strong>{formatTimer(remainingSeconds)}</strong></div>
-              <div className="mobile-interview-question-timer-track" role="progressbar" aria-label="Question time remaining" aria-valuenow={remainingSeconds} aria-valuemin={0} aria-valuemax={session.questionDurationSeconds}>
+              <div className="mobile-interview-question-timer-track" role="progressbar" aria-label="Question time remaining" aria-valuenow={remainingSeconds} aria-valuemin={0} aria-valuemax={currentPrompt.timeLimitSeconds}>
                 <span style={{ width: `${timePercent}%` }} />
               </div>
             </div>
@@ -695,54 +795,71 @@ export default function MobileInterview() {
             <button className="primary-button" type="button" onClick={resumeSession}>Resume interview</button>
           </div>
         )}
-        <article className="mobile-interview-prompt">
-          {currentPrompt.priority === 'high' && <div className="mobile-interview-prompt-meta"><strong>High priority</strong></div>}
-          <h3
-            onPointerDown={(event) => startQuestionLongPress(event, currentPrompt.text)}
-            onPointerUp={cancelQuestionLongPress}
-            onPointerCancel={cancelQuestionLongPress}
-            onPointerLeave={cancelQuestionLongPress}
-            onPointerMove={moveQuestionLongPress}
-            onContextMenu={(event) => handleQuestionContextMenu(event, currentPrompt.text)}
-          >
-            {currentPrompt.text.split('\n').map((line, index) => <span key={index}>{line}{index < currentPrompt.text.split('\n').length - 1 && <br />}</span>)}
-          </h3>
-          <span className="mobile-interview-sr-only" aria-live="polite">
-            {copyNotice}
-          </span>
-          {currentPrompt.starterCode && <pre className="mobile-interview-code"><code>{currentPrompt.starterCode}</code></pre>}
-          {currentPrompt.kind === 'mcq' && (
-            <fieldset className="mobile-interview-options" disabled={session.status === 'paused'}>
-              <legend>Choose one answer</legend>
-              {currentPrompt.options?.map((option) => (
-                <label key={option.id} className={currentPrompt.selectedOptionId === option.id ? 'selected' : ''}>
-                  <input type="radio" name={`answer-${currentPrompt.id}`} value={option.id} checked={currentPrompt.selectedOptionId === option.id} onChange={() => updatePrompt(currentPrompt.id, { selectedOptionId: option.id })} />
-                  <span>{option.text}</span>
-                </label>
-              ))}
-            </fieldset>
-          )}
-          <label className="mobile-interview-note">
-            <span className="mobile-interview-sr-only">{currentPrompt.kind === 'coding' ? 'Your code answer' : 'Your answer'}</span>
-            <textarea
-              rows={5}
-              value={currentPrompt.answerText ?? currentPrompt.note}
-              onChange={(event) => updatePrompt(currentPrompt.id, { answerText: event.target.value })}
-              placeholder={currentPrompt.kind === 'coding' ? 'Write your solution…' : 'Answer in your own words (or aloud)…'}
-              disabled={session.status === 'paused'}
+        {codingActive ? (
+          <CodingInterviewErrorBoundary>
+            <CodingInterviewExperience
+              prompt={codingPrompt}
+              codingQuestion={bankQuestion?.codingQuestion}
+              paused={session.status === 'paused'}
+              answerOpen={feedback?.promptId === currentPrompt.id}
+              onPromptChange={(update) => updatePrompt(currentPrompt.id, update)}
+              onSubmit={submitAnswer}
+              onHideAnswer={hideCodingAnswer}
+              onNext={continueAfterFeedback}
+              onTrySolution={tryCodingSolution}
+              onKeyboardVisibilityChange={onCodingKeyboardVisibilityChange}
             />
-          </label>
-          <div className="mobile-interview-prompt-tools">
-            <button
-              className="primary-button mobile-interview-submit"
-              type="button"
-              disabled={session.status === 'paused' || (currentPrompt.kind === 'mcq' && !currentPrompt.selectedOptionId)}
-              onClick={submitAnswer}
+          </CodingInterviewErrorBoundary>
+        ) : (
+          <article className="mobile-interview-prompt">
+            {currentPrompt.priority === 'high' && <div className="mobile-interview-prompt-meta"><strong>High priority</strong></div>}
+            <h3
+              onPointerDown={(event) => startQuestionLongPress(event, currentPrompt.text)}
+              onPointerUp={cancelQuestionLongPress}
+              onPointerCancel={cancelQuestionLongPress}
+              onPointerLeave={cancelQuestionLongPress}
+              onPointerMove={moveQuestionLongPress}
+              onContextMenu={(event) => handleQuestionContextMenu(event, currentPrompt.text)}
             >
-              Submit
-            </button>
-          </div>
-        </article>
+              {currentPrompt.text.split('\n').map((line, index) => <span key={index}>{line}{index < currentPrompt.text.split('\n').length - 1 && <br />}</span>)}
+            </h3>
+            <span className="mobile-interview-sr-only" aria-live="polite">
+              {copyNotice}
+            </span>
+            {currentPrompt.starterCode && <pre className="mobile-interview-code"><code>{currentPrompt.starterCode}</code></pre>}
+            {currentPrompt.kind === 'mcq' && (
+              <fieldset className="mobile-interview-options" disabled={session.status === 'paused'}>
+                <legend>Choose one answer</legend>
+                {currentPrompt.options?.map((option) => (
+                  <label key={option.id} className={currentPrompt.selectedOptionId === option.id ? 'selected' : ''}>
+                    <input type="radio" name={`answer-${currentPrompt.id}`} value={option.id} checked={currentPrompt.selectedOptionId === option.id} onChange={() => updatePrompt(currentPrompt.id, { selectedOptionId: option.id })} />
+                    <span>{option.text}</span>
+                  </label>
+                ))}
+              </fieldset>
+            )}
+            <label className="mobile-interview-note">
+              <span className="mobile-interview-sr-only">{currentPrompt.kind === 'coding' ? 'Your code answer' : 'Your answer'}</span>
+              <textarea
+                rows={5}
+                value={currentPrompt.answerText ?? currentPrompt.note}
+                onChange={(event) => updatePrompt(currentPrompt.id, { answerText: event.target.value })}
+                placeholder={currentPrompt.kind === 'coding' ? 'Write your solution…' : 'Answer in your own words (or aloud)…'}
+                disabled={session.status === 'paused'}
+              />
+            </label>
+            <div className="mobile-interview-prompt-tools">
+              <button
+                className="primary-button mobile-interview-submit"
+                type="button"
+                disabled={session.status === 'paused' || (currentPrompt.kind === 'mcq' && !currentPrompt.selectedOptionId)}
+                onClick={submitAnswer}
+              >
+                Submit
+              </button>
+            </div>
+          </article>
+        )}
         <footer className="mobile-interview-controls">
           <div className="mobile-interview-control-row" role="group" aria-label="Interview controls">
             <button className="secondary-button" type="button" aria-label="Previous question" title="Previous question" disabled={session.activeIndex === 0 || session.status === 'paused'} onClick={() => moveTo(session.activeIndex - 1)}>
@@ -761,7 +878,7 @@ export default function MobileInterview() {
             </button>
           </div>
         </footer>
-        {feedback && (
+        {feedback && !codingActive && (
           <div className={`mobile-interview-feedback-overlay ${feedback.result}`} role="dialog" aria-modal="true" aria-labelledby="mobile-feedback-title">
             <section className="mobile-interview-feedback-card">
               <span className="mobile-interview-feedback-icon" aria-hidden="true">{feedback.result === 'correct' ? '✓' : feedback.result === 'incorrect' ? '↻' : '✓'}</span>
@@ -846,6 +963,133 @@ export default function MobileInterview() {
   );
 }
 
+function TimeWheelPicker({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange: (seconds: number) => void;
+}) {
+  const titleId = useId();
+  const wheelRef = useRef<HTMLDivElement>(null);
+  const [isOpen, setIsOpen] = useState(false);
+  const [draftSeconds, setDraftSeconds] = useState(value);
+  const selectedIndex = getClosestTimeOptionIndex(draftSeconds);
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    setDraftSeconds(value);
+    const frame = window.requestAnimationFrame(() => {
+      if (!wheelRef.current) return;
+      wheelRef.current.scrollTop = getClosestTimeOptionIndex(value) * 44;
+      wheelRef.current.focus();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [isOpen, value]);
+
+  const moveWheel = (index: number) => {
+    const nextIndex = Math.max(0, Math.min(QUESTION_TIME_OPTIONS.length - 1, index));
+    setDraftSeconds(QUESTION_TIME_OPTIONS[nextIndex]);
+    wheelRef.current?.scrollTo({ top: nextIndex * 44, behavior: 'smooth' });
+  };
+
+  const handleWheelKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      moveWheel(selectedIndex + (event.key === 'ArrowDown' ? 1 : -1));
+    } else if (event.key === 'Home' || event.key === 'End') {
+      event.preventDefault();
+      moveWheel(event.key === 'Home' ? 0 : QUESTION_TIME_OPTIONS.length - 1);
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      onChange(draftSeconds);
+      setIsOpen(false);
+    }
+  };
+
+  return (
+    <div className="mobile-interview-schedule-field">
+      <span>{label}</span>
+      <button
+        type="button"
+        className="mobile-interview-time-picker-trigger"
+        aria-haspopup="dialog"
+        aria-expanded={isOpen}
+        onClick={() => setIsOpen(true)}
+      >
+        <strong>{formatQuestionTime(value)}</strong>
+        <span aria-hidden="true">⌄</span>
+      </button>
+      {isOpen && (
+        <div className="mobile-interview-time-picker-backdrop" onClick={(event) => {
+          if (event.target === event.currentTarget) setIsOpen(false);
+        }}>
+          <section
+            className="mobile-interview-time-picker-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={titleId}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') setIsOpen(false);
+              else if (event.target === wheelRef.current) handleWheelKeyDown(event);
+            }}
+          >
+            <header><strong id={titleId}>{label}</strong></header>
+            <div className="mobile-interview-time-picker-wheel-wrap">
+              <div className="mobile-interview-time-picker-selection" aria-hidden="true" />
+              <div
+                ref={wheelRef}
+                className="mobile-interview-time-picker-wheel"
+                role="listbox"
+                aria-label={label}
+                aria-activedescendant={`${titleId}-option-${selectedIndex}`}
+                tabIndex={0}
+                onScroll={(event) => {
+                  const index = Math.max(0, Math.min(
+                    QUESTION_TIME_OPTIONS.length - 1,
+                    Math.round(event.currentTarget.scrollTop / 44),
+                  ));
+                  setDraftSeconds(QUESTION_TIME_OPTIONS[index]);
+                }}
+              >
+                <div className="mobile-interview-time-picker-spacer" aria-hidden="true" />
+                {QUESTION_TIME_OPTIONS.map((seconds, index) => (
+                  <div
+                    key={seconds}
+                    id={`${titleId}-option-${index}`}
+                    className={`mobile-interview-time-picker-option${selectedIndex === index ? ' selected' : ''}`}
+                    role="option"
+                    aria-selected={selectedIndex === index}
+                    onClick={() => moveWheel(index)}
+                  >
+                    {formatQuestionTime(seconds)}
+                  </div>
+                ))}
+                <div className="mobile-interview-time-picker-spacer" aria-hidden="true" />
+              </div>
+            </div>
+            <footer>
+              <button type="button" className="secondary-button" onClick={() => setIsOpen(false)}>Cancel</button>
+              <button type="button" className="primary-button" onClick={() => {
+                onChange(draftSeconds);
+                setIsOpen(false);
+              }}>Done</button>
+            </footer>
+          </section>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function getClosestTimeOptionIndex(seconds: number): number {
+  return QUESTION_TIME_OPTIONS.reduce((closestIndex, option, index) => (
+    Math.abs(option - seconds) < Math.abs(QUESTION_TIME_OPTIONS[closestIndex] - seconds) ? index : closestIndex
+  ), 0);
+}
+
 function trackLabel(track: MobileInterviewTrack): string {
   return track === 'kotlin' ? 'Kotlin' : track === 'spring-boot' ? 'Spring Boot' : 'Mixed';
 }
@@ -859,9 +1103,9 @@ function formatTimer(seconds: number): string {
 function formatQuestionTime(seconds: number): string {
   const minutes = Math.floor(seconds / 60);
   const remainingSeconds = seconds % 60;
-  if (minutes === 0) return `${remainingSeconds}s`;
-  if (remainingSeconds === 0) return `${minutes}m`;
-  return `${minutes}m ${remainingSeconds}s`;
+  if (minutes === 0) return `${remainingSeconds} sec`;
+  if (remainingSeconds === 0) return `${minutes} min`;
+  return `${minutes} min ${remainingSeconds} sec`;
 }
 
 function getSectionOrientedPrompts(
@@ -894,12 +1138,15 @@ function shufflePrompts(prompts: MobileInterviewPrompt[]): MobileInterviewPrompt
 }
 
 function toMobilePrompt(question: MobileBankQuestion): MobileInterviewPrompt {
+  const isCoding = question.codingProblemId !== undefined || question.codingQuestion !== undefined;
   return {
     id: question.id,
     checklistId: question.setId,
     checklistTitle: question.setTitle,
     sectionId: question.sectionId,
-    sectionTitle: question.sectionTitle,
+    sectionTitle: question.codingQuestion
+      ? `${question.codingQuestion.language === 'kotlin' ? 'Kotlin' : 'Java'} Coding`
+      : question.sectionTitle,
     text: question.text,
     referenceItems: [],
     answered: false,
@@ -908,6 +1155,11 @@ function toMobilePrompt(question: MobileBankQuestion): MobileInterviewPrompt {
     referenceRevealed: false,
     note: '',
     referenceAnswer: question.answer,
+    ...(isCoding ? {
+      kind: 'coding' as const,
+      codingProblemId: question.codingProblemId,
+      codingLanguage: question.codingLanguage,
+    } : {}),
   };
 }
 
@@ -938,12 +1190,7 @@ function getCalendarDays(month: Date): Date[] {
 }
 
 function formatScheduleDate(date: string): string {
-  return new Date(`${date}T00:00:00`).toLocaleDateString(undefined, {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
+  return formatAppDateKey(date);
 }
 
 function renderPrompt(item: Pick<MobileInterviewPrompt, 'text' | 'codeTerms'>) {

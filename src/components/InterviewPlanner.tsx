@@ -12,6 +12,7 @@ import {
 } from '../engine/interviews';
 import JobApplicationChecklist from './JobApplicationChecklist';
 import { isJobApplicationScheduled, type JobApplicationStore } from '../engine/job-applications';
+import { formatAppDate, formatAppDateKey } from '../utils/date-format';
 
 interface InterviewPlannerProps {
   store: InterviewStore;
@@ -150,7 +151,7 @@ export default function InterviewPlanner({ store, onChange, jobApplicationStore,
                 key={dateKey}
                 type="button"
                 role="gridcell"
-                aria-label={`${day.toLocaleDateString(undefined, { dateStyle: 'full' })}${count ? `, ${count} sessions` : ''}${hasJobApplications ? ', job applications due' : ''}`}
+                aria-label={`${formatAppDate(day)}${count ? `, ${count} sessions` : ''}${hasJobApplications ? ', job applications due' : ''}`}
                 aria-pressed={selectedDate === dateKey}
                 className={`calendar-day${outsideMonth ? ' outside-month' : ''}${selectedDate === dateKey ? ' selected' : ''}${count ? ' has-interview' : ''}${hasJobApplications ? ' has-job-applications' : ''}`}
                 onClick={() => setSelectedDate(dateKey)}
@@ -694,7 +695,7 @@ function toDateKey(date: Date): string {
 }
 
 function formatDate(date: string): string {
-  return new Date(`${date}T12:00:00`).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  return formatAppDateKey(date);
 }
 
 function countItems(checklist: SkillChecklist): number {

@@ -3,8 +3,10 @@ import {
   createMobileInterviewSession,
   expireMobileInterviewPrompt,
   finishMobileInterviewSession,
+  formatMobileInterviewQaText,
   getMobileInterviewPromptLimit,
   getMobileInterviewRemainingSeconds,
+  isProgramInterviewPrompt,
   loadMobileInterviewHistory,
   loadMobileInterviewSchedules,
   loadMobileInterviewSession,
@@ -98,6 +100,73 @@ describe('mobile interview sessions', () => {
       endsAt: 61_000,
     });
     expect(session.prompts.map((item) => item.timeLimitSeconds)).toEqual([60, 60, 60]);
+  });
+
+  it('uses the secondary timer for program-bank or program-section questions only', () => {
+    const prompts = [
+      prompt('regular'),
+      { ...prompt('program-bank'), checklistTitle: 'Programming Questions' },
+      { ...prompt('program-section'), sectionTitle: 'Program Exercises' },
+    ];
+    const session = createMobileInterviewSession(prompts, 'kotlin', 0, 1_000, {
+      questionTimeLimitSeconds: 120,
+      programQuestionTimeLimitSeconds: 900,
+    });
+
+    expect(prompts.map(isProgramInterviewPrompt)).toEqual([false, true, true]);
+    expect(session.durationSeconds).toBe(1_920);
+    expect(session.prompts.map((item) => item.timeLimitSeconds)).toEqual([120, 900, 900]);
+    expect(moveMobileInterviewToPrompt(session, 1, 2_000)).toMatchObject({
+      activeIndex: 1,
+      questionDurationSeconds: 120,
+      remainingSeconds: 900,
+      endsAt: 902_000,
+    });
+  });
+
+  it('gives coding questions a five-minute timer and preserves editor memory in saved sessions', () => {
+    const codingPrompt = {
+      ...prompt('coding'),
+      kind: 'coding' as const,
+      codingProblemId: 7,
+      codingLanguage: 'java' as const,
+      codingAnswers: { kotlin: 'fun main() {}', java: 'class Main {}' },
+      codingStdin: 'sample input',
+    };
+    const session = createMobileInterviewSession([codingPrompt], 'mixed', 0, 1_000, {
+      questionTimeLimitSeconds: 60,
+    });
+    const restored = parseMobileInterviewSession(session);
+
+    expect(session.prompts[0].timeLimitSeconds).toBe(300);
+    expect(session.durationSeconds).toBe(300);
+    expect(restored?.prompts[0]).toMatchObject({
+      codingProblemId: 7,
+      codingLanguage: 'java',
+      codingAnswers: { kotlin: 'fun main() {}', java: 'class Main {}' },
+      codingStdin: 'sample input',
+    });
+  });
+
+  it('formats the full interview with reference and submitted answers for text export', () => {
+    const prompts = [
+      { ...prompt('one'), text: 'What is null safety?', answerText: 'Avoid null pointer exceptions.' },
+      {
+        ...prompt('two'),
+        text: 'Choose the correct option.',
+        kind: 'mcq' as const,
+        options: [{ id: 'a', text: 'Option A' }, { id: 'b', text: 'Option B' }],
+        correctOptionId: 'b',
+        selectedOptionId: 'a',
+      },
+    ];
+    const session = createMobileInterviewSession(prompts, 'kotlin', 15, 1_000, { questionTimeLimitSeconds: 60 });
+    const text = formatMobileInterviewQaText({ ...session, title: 'Kotlin Review' });
+
+    expect(text).toContain('Kotlin Review — Questions & Answers');
+    expect(text).toContain('Question 1 — Null safety\nWhat is null safety?\n\nReference answer:\nExample answer\n\nYour answer:\nAvoid null pointer exceptions.');
+    expect(text).toContain('Question 2 — Null safety\nChoose the correct option.\n\nReference answer:\nCorrect option: Option B\nExample answer\n\nYour answer:\nOption A');
+    expect(text).toContain('----------------------------------------');
   });
 
   it('creates untimed sessions that preserve section order through pause, resume, and navigation', () => {
@@ -199,6 +268,9 @@ describe('mobile interview sessions', () => {
     expect(parseMobileInterviewSchedule({ ...schedule, randomizeQuestions: false })).toMatchObject({ randomizeQuestions: false });
     expect(parseMobileInterviewSchedule({ ...schedule, questionTimeLimitSeconds: 90 })).toMatchObject({ questionTimeLimitSeconds: 90 });
     expect(parseMobileInterviewSchedule({ ...schedule, questionTimeLimitSeconds: 0 })).toBeUndefined();
+    expect(parseMobileInterviewSchedule({ ...schedule, programQuestionTimeLimitSeconds: 900 }))
+      .toMatchObject({ programQuestionTimeLimitSeconds: 900 });
+    expect(parseMobileInterviewSchedule({ ...schedule, programQuestionTimeLimitSeconds: 0 })).toBeUndefined();
   });
 
   it('migrates a saved untimed active session to an independently timed question clock', () => {

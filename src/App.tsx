@@ -13,6 +13,7 @@ import ProblemImportanceRating from './components/ProblemImportanceRating';
 import { seedSkillChecklists } from './data/skill-checklists';
 import { loadInterviewStore, saveInterviewStore, type InterviewStore } from './engine/interviews';
 import { getJobApplicationProgress, getLocalDateKey, loadJobApplicationStore, saveJobApplicationStore, type JobApplicationStore } from './engine/job-applications';
+import { formatAppDate, formatAppDateTime } from './utils/date-format';
 
 const CompleteRevision = lazy(() => import('./components/CompleteRevision'));
 const SampleInterview = lazy(() => import('./components/SampleInterview'));
@@ -1354,7 +1355,7 @@ export default function App() {
                 <div className="mini-metric"><span>Attempts</span><strong>{currentRecord.attempts}</strong></div>
                 <div className="mini-metric"><span>Hints used</span><strong>{currentRecord.hintsUsed}</strong></div>
                 <div className="mini-metric"><span>Best confidence</span><strong>{currentRecord.confidence}/5</strong></div>
-                <div className="mini-metric"><span>Next review</span><strong>{currentRecord.nextReviewAt ? new Date(currentRecord.nextReviewAt ?? '').toLocaleDateString() : 'Not scheduled'}</strong></div>
+                <div className="mini-metric"><span>Next review</span><strong>{currentRecord.nextReviewAt ? formatAppDateTime(new Date(currentRecord.nextReviewAt)) : 'Not scheduled'}</strong></div>
                 <h3>Related concepts</h3>
                 <ul className="list-view compact">
                   {selectedProblem.concepts.map((concept) => <li key={concept}>{concept}</li>)}

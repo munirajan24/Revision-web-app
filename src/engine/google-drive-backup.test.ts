@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { restoreGoogleDriveBackup, saveGoogleDriveBackup, signInToGoogleDrive } from './google-drive-backup';
+import { checkGoogleDriveBackup, restoreGoogleDriveBackup, saveGoogleDriveBackup, signInToGoogleDrive } from './google-drive-backup';
 
 describe('Google Drive backup', () => {
   const fetchMock = vi.fn();
@@ -82,6 +82,33 @@ describe('Google Drive backup', () => {
     expect(String(uploadCall[0])).toContain('uploadType=multipart');
     expect(uploadCall[1].body).toContain('"parents":["appDataFolder"]');
     expect(uploadCall[1].body).toContain('{"version":3}');
+  });
+
+  it('reports the existing backup name, modified time, and size', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        files: [{
+          id: 'backup-id',
+          name: 'kotlin-interview-trainer-backup.json',
+          modifiedTime: '2026-11-25T00:00:00.000Z',
+          size: '2048',
+        }],
+      }),
+    });
+
+    await expect(checkGoogleDriveBackup('token')).resolves.toEqual({
+      fileName: 'kotlin-interview-trainer-backup.json',
+      modifiedTime: '2026-11-25T00:00:00.000Z',
+      sizeBytes: 2048,
+    });
+    expect(String(fetchMock.mock.calls[0][0])).toContain('fields=files%28id%2Cname%2CmodifiedTime%2Csize%29');
+  });
+
+  it('reports when no backup exists', async () => {
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ files: [] }) });
+
+    await expect(checkGoogleDriveBackup('token')).resolves.toBeUndefined();
   });
 
   it('restores the latest named backup from the app data folder', async () => {

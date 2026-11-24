@@ -14,7 +14,7 @@ import { seedSkillChecklists } from './data/skill-checklists';
 import { loadInterviewStore, saveInterviewStore, type InterviewStore } from './engine/interviews';
 import { getJobApplicationProgress, getLocalDateKey, loadJobApplicationStore, saveJobApplicationStore, type JobApplicationStore } from './engine/job-applications';
 import { formatAppDate, formatAppDateTime } from './utils/date-format';
-import { loadGoogleIdentityServices, restoreGoogleDriveBackup, saveGoogleDriveBackup, signInToGoogleDrive, type GoogleDriveAccount } from './engine/google-drive-backup';
+import { checkGoogleDriveBackup, loadGoogleIdentityServices, restoreGoogleDriveBackup, saveGoogleDriveBackup, signInToGoogleDrive, type GoogleDriveAccount, type GoogleDriveBackupDetails } from './engine/google-drive-backup';
 
 const CompleteRevision = lazy(() => import('./components/CompleteRevision'));
 const SampleInterview = lazy(() => import('./components/SampleInterview'));
@@ -76,6 +76,18 @@ const tabByView: Record<View, string> = {
 function getViewFromUrl(): View {
   const tab = new URLSearchParams(window.location.search).get('tab');
   return tab ? viewByTab[tab.toLowerCase()] ?? 'dashboard' : 'dashboard';
+}
+
+function formatBackupFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} bytes`;
+  const units = ['KB', 'MB', 'GB'];
+  let size = bytes / 1024;
+  let unitIndex = 0;
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex += 1;
+  }
+  return `${size.toFixed(size < 10 ? 1 : 0)} ${units[unitIndex]}`;
 }
 
 const languageText = {
@@ -275,6 +287,8 @@ export default function App() {
   const [googleBackupBusy, setGoogleBackupBusy] = useState(false);
   const [googleBackupStatus, setGoogleBackupStatus] = useState('');
   const [googleBackupError, setGoogleBackupError] = useState('');
+  const [googleDriveBackupState, setGoogleDriveBackupState] = useState<'unchecked' | 'checking' | 'missing' | 'exists'>('unchecked');
+  const [googleDriveBackupDetails, setGoogleDriveBackupDetails] = useState<GoogleDriveBackupDetails | null>(null);
   const [selectedProblemId, setSelectedProblemId] = useState(initial.selectedProblemId);
   const [mode, setMode] = useState<TrainingMode>(initial.mode);
   const [interviewStore, setInterviewStore] = useState<InterviewStore>(initialInterviewStore);
@@ -317,6 +331,28 @@ export default function App() {
   const selectedProblem = getProblemById(selectedProblemId) ?? problems[0];
   const editorCode = drafts[selectedProblem.id] ?? '';
   const activeLanguageText = languageText[language];
+
+  const refreshGoogleDriveBackupStatus = async (accessToken: string) => {
+    setGoogleDriveBackupState('checking');
+    setGoogleDriveBackupDetails(null);
+    try {
+      const backup = await checkGoogleDriveBackup(accessToken);
+      setGoogleDriveBackupDetails(backup ?? null);
+      setGoogleDriveBackupState(backup ? 'exists' : 'missing');
+    } catch (error) {
+      setGoogleDriveBackupState('unchecked');
+      setGoogleBackupError(error instanceof Error ? error.message : 'Could not check Google Drive for a backup.');
+    }
+  };
+
+  const getValidGoogleDriveAccount = async () => {
+    if (googleAccount && googleAccount.expiresAt > Date.now() + 60_000) return googleAccount;
+    const account = await signInToGoogleDrive(googleClientId, '');
+    setGoogleAccount(account);
+    setRememberedGoogleEmail(account.email);
+    localStorage.setItem(GOOGLE_ACCOUNT_EMAIL_KEY, account.email);
+    return account;
+  };
 
   const navigateToView = (nextView: View) => {
     if (view === 'mobile-interview' && nextView !== 'mobile-interview') {
@@ -695,6 +731,7 @@ export default function App() {
       setRememberedGoogleEmail(account.email);
       localStorage.setItem(GOOGLE_ACCOUNT_EMAIL_KEY, account.email);
       setGoogleBackupStatus(`Signed in as ${account.email}.`);
+      await refreshGoogleDriveBackupStatus(account.accessToken);
     } catch (error) {
       setGoogleBackupError(error instanceof Error ? error.message : 'Google sign-in failed.');
     } finally {
@@ -712,6 +749,7 @@ export default function App() {
       setRememberedGoogleEmail(account.email);
       localStorage.setItem(GOOGLE_ACCOUNT_EMAIL_KEY, account.email);
       setGoogleBackupStatus(`Connected as ${account.email}.`);
+      await refreshGoogleDriveBackupStatus(account.accessToken);
     } catch (error) {
       setGoogleBackupError(error instanceof Error ? error.message : 'Could not reconnect to the remembered Google account. Try choosing the account again.');
     } finally {
@@ -723,6 +761,8 @@ export default function App() {
     setGoogleAccount(null);
     setRememberedGoogleEmail('');
     localStorage.removeItem(GOOGLE_ACCOUNT_EMAIL_KEY);
+    setGoogleDriveBackupState('unchecked');
+    setGoogleDriveBackupDetails(null);
     setGoogleBackupStatus('Logged out of Google Drive backup on this device.');
     setGoogleBackupError('');
   };
@@ -738,6 +778,7 @@ export default function App() {
       setGoogleAccount(account);
       await saveGoogleDriveBackup(account.accessToken, JSON.stringify(createCurrentBackup(), null, 2));
       setGoogleBackupStatus(`Backup saved to Google Drive for ${account.email}.`);
+      await refreshGoogleDriveBackupStatus(account.accessToken);
     } catch (error) {
       setGoogleBackupError(error instanceof Error ? error.message : 'Google Drive backup failed.');
     } finally {
@@ -761,6 +802,7 @@ export default function App() {
       }
       setPendingProgressImport({ fileName: remoteBackup.fileName, backup });
       setGoogleBackupStatus(`Backup loaded for ${account.email}. Choose Merge / Add or Replace to continue.`);
+      await refreshGoogleDriveBackupStatus(account.accessToken);
     } catch (error) {
       setGoogleBackupError(error instanceof Error ? error.message : 'Google Drive restore failed.');
     } finally {
@@ -1646,7 +1688,7 @@ export default function App() {
                   <h4>Google Drive backup · Cloud</h4>
                   <p>Save or restore a private cloud copy in the signed-in Google account. Nothing syncs automatically; choose when to upload or download.</p>
                   {!googleClientId
-                    ? <p className="progress-import-status">Google Drive backup needs a configured VITE_GOOGLE_CLIENT_ID.</p>
+                    ? <p className="progress-import-status">Google Drive is not configured in this build. Add VITE_GOOGLE_CLIENT_ID to the Render environment and redeploy.</p>
                     : googleAccount
                       ? <p className="progress-import-status">Signed in as {googleAccount.email}.</p>
                       : rememberedGoogleEmail
@@ -1670,6 +1712,16 @@ export default function App() {
                   )}
                   {googleClientId && googleAccount && (
                     <div className="option-row google-backup-actions">
+                      <button className="secondary-button" type="button" disabled={googleBackupBusy} onClick={() => {
+                        setGoogleBackupBusy(true);
+                        setGoogleBackupError('');
+                        void getValidGoogleDriveAccount()
+                          .then((account) => refreshGoogleDriveBackupStatus(account.accessToken))
+                          .catch((error: unknown) => setGoogleBackupError(error instanceof Error ? error.message : 'Could not reconnect to Google Drive.'))
+                          .finally(() => setGoogleBackupBusy(false));
+                      }}>
+                        {googleDriveBackupState === 'checking' ? 'Checking…' : 'Refresh backup status'}
+                      </button>
                       <button className="secondary-button" type="button" disabled={googleBackupBusy} onClick={handleGoogleDriveBackup}>
                         {googleBackupBusy ? 'Working…' : 'Save to Google Drive'}
                       </button>
@@ -1677,6 +1729,27 @@ export default function App() {
                         Restore from Google Drive
                       </button>
                       <button className="text-action" type="button" disabled={googleBackupBusy} onClick={forgetGoogleAccount}>Log out</button>
+                    </div>
+                  )}
+                  {googleClientId && googleAccount && (
+                    <div className={`google-drive-backup-details ${googleDriveBackupState === 'exists' ? 'is-present' : ''}`} role="status" aria-live="polite">
+                      {googleDriveBackupState === 'checking' && <span>Checking Google Drive for a backup…</span>}
+                      {googleDriveBackupState === 'unchecked' && <span>Backup status has not been checked.</span>}
+                      {googleDriveBackupState === 'missing' && <span>No backup found in this Google Drive account.</span>}
+                      {googleDriveBackupState === 'exists' && googleDriveBackupDetails && (
+                        <>
+                          <strong>Backup found in Google Drive</strong>
+                          <span>{googleDriveBackupDetails.fileName}</span>
+                          <span>
+                            {googleDriveBackupDetails.modifiedTime
+                              ? `Last updated ${new Date(googleDriveBackupDetails.modifiedTime).toLocaleString()}`
+                              : 'Last-updated time unavailable'}
+                            {googleDriveBackupDetails.sizeBytes !== undefined
+                              ? ` · ${formatBackupFileSize(googleDriveBackupDetails.sizeBytes)}`
+                              : ''}
+                          </span>
+                        </>
+                      )}
                     </div>
                   )}
                   {googleBackupStatus && <p className="progress-import-status" role="status">{googleBackupStatus}</p>}

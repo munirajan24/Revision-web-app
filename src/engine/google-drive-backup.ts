@@ -19,6 +19,13 @@ interface GoogleDriveFile {
   id: string;
   name: string;
   modifiedTime?: string;
+  size?: string;
+}
+
+export interface GoogleDriveBackupDetails {
+  fileName: string;
+  modifiedTime?: string;
+  sizeBytes?: number;
 }
 
 declare global {
@@ -126,6 +133,16 @@ export async function saveGoogleDriveBackup(accessToken: string, serializedBacku
   if (!response.ok) throw await getGoogleApiError(response, 'Could not save the backup to Google Drive.');
 }
 
+export async function checkGoogleDriveBackup(accessToken: string): Promise<GoogleDriveBackupDetails | undefined> {
+  const file = await findGoogleDriveBackup(accessToken);
+  if (!file) return undefined;
+  return {
+    fileName: file.name,
+    ...(file.modifiedTime ? { modifiedTime: file.modifiedTime } : {}),
+    ...(file.size && Number.isFinite(Number(file.size)) ? { sizeBytes: Number(file.size) } : {}),
+  };
+}
+
 export async function restoreGoogleDriveBackup(accessToken: string): Promise<{ fileName: string; serializedBackup: string }> {
   const backupFile = await findGoogleDriveBackup(accessToken);
   if (!backupFile) throw new Error('No Google Drive backup was found for this app and account.');
@@ -142,7 +159,7 @@ async function findGoogleDriveBackup(accessToken: string): Promise<GoogleDriveFi
   const parameters = new URLSearchParams({
     spaces: 'appDataFolder',
     q: `name = '${BACKUP_FILE_NAME}' and trashed = false`,
-    fields: 'files(id,name,modifiedTime)',
+    fields: 'files(id,name,modifiedTime,size)',
     orderBy: 'modifiedTime desc',
     pageSize: '1',
   });

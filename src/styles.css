@@ -1274,6 +1274,9 @@ textarea, input, select { background: var(--input); color: var(--text); border: 
 .local-backup-panel h4, .google-backup-panel h4 { font-size: 0.9rem; }
 .local-backup-panel > p:not(.progress-import-status), .google-backup-panel > p:not(.progress-import-status) { color: var(--muted); font-size: 0.78rem; line-height: 1.45; }
 .google-backup-actions { flex-wrap: wrap; }
+.google-drive-backup-details { display: grid; gap: 4px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 7px; color: var(--muted); font-size: 0.78rem; line-height: 1.45; overflow-wrap: anywhere; }
+.google-drive-backup-details.is-present { border-color: color-mix(in srgb, var(--success) 40%, var(--border)); background: color-mix(in srgb, var(--success) 6%, var(--card)); }
+.google-drive-backup-details strong { color: var(--success); }
 .google-backup-error { margin: 0; color: var(--danger); font-size: 0.78rem; line-height: 1.45; }
 .mode-switch {
   display: inline-flex;

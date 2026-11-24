@@ -730,7 +730,7 @@ export default function App() {
   };
 
   return (
-    <div className={view === 'mobile-interview' ? `app-shell mobile-interview-app${mobileNavOpen ? ' mobile-nav-open' : ''}` : 'app-shell'}>
+    <div className={`app-shell${view === 'mobile-interview' ? ' mobile-interview-app' : ''}${mobileNavOpen ? ' mobile-nav-open' : ''}`}>
       <aside className="sidebar">
         <div className="brand-block">
           <div className="logo">{activeLanguageText.shortCode}</div>
@@ -773,16 +773,6 @@ export default function App() {
           </button>
           {[
             {
-              id: 'coding',
-              label: 'Coding',
-              items: [
-                ['questions', 'Coding Questions'],
-                ['practice', 'Coding Practice'],
-                ['keywords', 'Keywords'],
-                ['reference', 'Syntax'],
-              ],
-            },
-            {
               id: 'interview',
               label: 'Interview Prep',
               items: [
@@ -791,6 +781,16 @@ export default function App() {
                 ['android-concepts', 'Android concepts'],
                 ['android-quick-review', 'Android quick review'],
                 ['sample-interview', 'Sample interview'],
+              ],
+            },
+            {
+              id: 'coding',
+              label: 'Coding',
+              items: [
+                ['questions', 'Coding Questions'],
+                ['practice', 'Coding Practice'],
+                ['keywords', 'Keywords'],
+                ['reference', 'Syntax'],
               ],
             },
             {
@@ -829,7 +829,7 @@ export default function App() {
       {mobileNavOpen && (
         <button
           type="button"
-          className="mobile-interview-sidebar-backdrop"
+          className="app-mobile-sidebar-backdrop"
           aria-label="Close navigation"
           onClick={() => setMobileNavOpen(false)}
         />
@@ -854,19 +854,22 @@ export default function App() {
               {view === 'settings' && 'Settings'}
             </h1>
           </div>
-          {view === 'mobile-interview' && (
-            <div className="mobile-interview-shell-controls">
+          <div className="mobile-app-header-actions">
+            {view === 'mobile-interview' && (
               <button type="button" className="secondary-button mobile-interview-shell-button" onClick={() => navigateToView('dashboard')}>‹ Back</button>
-              <button
-                type="button"
-                className="secondary-button mobile-interview-shell-button mobile-interview-menu-toggle"
-                aria-expanded={mobileNavOpen}
-                onClick={() => setMobileNavOpen((open) => !open)}
-              >
-                ☰ Menu
-              </button>
-            </div>
-          )}
+            )}
+            <button
+              type="button"
+              className="secondary-button mobile-app-menu-toggle"
+              aria-expanded={mobileNavOpen}
+              aria-label={mobileNavOpen ? 'Hide navigation' : 'Show navigation'}
+              onClick={() => setMobileNavOpen((open) => !open)}
+            >
+              {mobileNavOpen
+                ? <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
+                : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg>}
+            </button>
+          </div>
           {(view === 'practice' || view === 'reference') && (
             <div className="topbar-controls">
               {view === 'practice' && (

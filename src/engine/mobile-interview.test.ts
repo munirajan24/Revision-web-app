@@ -132,6 +132,24 @@ describe('mobile interview question statistics', () => {
     });
   });
 
+  it('replaces a skipped count with attendance and the eventual answer result', () => {
+    const storage = memoryStorage();
+
+    recordMobileInterviewQuestionSkipped(storage, 'session-1', 'question-1');
+    recordMobileInterviewQuestionAttendance(storage, 'session-1', 'question-1');
+    recordMobileInterviewQuestionAnswerResult(storage, 'session-1', 'question-1', 'incorrect');
+
+    expect(loadMobileInterviewQuestionStats(storage)).toEqual({
+      'question-1': { attended: 1, correct: 0, wrong: 1, skipped: 0 },
+    });
+
+    recordMobileInterviewQuestionAnswerResult(storage, 'session-1', 'question-1', 'correct');
+
+    expect(loadMobileInterviewQuestionStats(storage)).toEqual({
+      'question-1': { attended: 1, correct: 1, wrong: 0, skipped: 0 },
+    });
+  });
+
   it('clears saved statistics', () => {
     const storage = memoryStorage();
     recordMobileInterviewQuestionAttendance(storage, 'session-1', 'question-1');

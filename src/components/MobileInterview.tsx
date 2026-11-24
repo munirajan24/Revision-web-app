@@ -417,7 +417,7 @@ export default function MobileInterview() {
         'answer-result statistics',
       );
     }
-    updatePrompt(currentPrompt.id, { answered: true, answerResult: result });
+    updatePrompt(currentPrompt.id, { answered: true, skipped: false, answerResult: result });
   }, [currentPrompt, recordQuestionStat, session, updatePrompt]);
 
   const retryCodingPromptWithExtraTime = useCallback(() => {

@@ -9,6 +9,7 @@ import {
   getMobileInterviewRemainingSeconds,
   isProgramInterviewPrompt,
   loadMobileInterviewHistory,
+  loadMobileInterviewBackup,
   loadMobileInterviewQuestionStats,
   loadMobileInterviewSchedules,
   loadMobileInterviewSession,
@@ -28,6 +29,7 @@ import {
   resumeMobileInterviewSession,
   retryCodingInterviewPromptWithExtraTime,
   saveMobileInterviewHistory,
+  saveMobileInterviewBackup,
   saveMobileInterviewSchedules,
   saveMobileInterviewSession,
   type MobileInterviewPrompt,
@@ -94,13 +96,25 @@ describe('mobile interview question statistics', () => {
     recordMobileInterviewQuestionAnswerResult(storage, 'session-2', 'question-1', 'correct');
 
     expect(loadMobileInterviewQuestionStats(storage)).toEqual({
-      'question-1': { attended: 0, correct: 1, wrong: 1, skipped: 0 },
+      'question-1': { attended: 2, correct: 1, wrong: 1, skipped: 0 },
     });
 
     recordMobileInterviewQuestionAnswerResult(storage, 'session-1', 'question-1', 'correct');
 
     expect(loadMobileInterviewQuestionStats(storage)).toEqual({
-      'question-1': { attended: 0, correct: 2, wrong: 0, skipped: 0 },
+      'question-1': { attended: 2, correct: 2, wrong: 0, skipped: 0 },
+    });
+  });
+
+  it('records attendance when an answer result is saved, even if the caller omits attendance', () => {
+    const storage = memoryStorage();
+
+    recordMobileInterviewQuestionAnswerResult(storage, 'session-1', 'question-1', 'correct');
+    recordMobileInterviewQuestionAnswerResult(storage, 'session-1', 'question-1', 'incorrect');
+    recordMobileInterviewQuestionSkipped(storage, 'session-1', 'question-1');
+
+    expect(loadMobileInterviewQuestionStats(storage)).toEqual({
+      'question-1': { attended: 1, correct: 0, wrong: 1, skipped: 0 },
     });
   });
 
@@ -147,6 +161,18 @@ describe('mobile interview question statistics', () => {
 
     expect(loadMobileInterviewQuestionStats(storage)).toEqual({
       'question-1': { attended: 1, correct: 1, wrong: 0, skipped: 0 },
+    });
+  });
+
+  it('keeps skip and attendance mutually exclusive for the same session and question', () => {
+    const storage = memoryStorage();
+
+    recordMobileInterviewQuestionSkipped(storage, 'session-1', 'question-1');
+    recordMobileInterviewQuestionAttendance(storage, 'session-1', 'question-1');
+    recordMobileInterviewQuestionSkipped(storage, 'session-1', 'question-1');
+
+    expect(loadMobileInterviewQuestionStats(storage)).toEqual({
+      'question-1': { attended: 1, correct: 0, wrong: 0, skipped: 0 },
     });
   });
 
@@ -466,11 +492,62 @@ describe('mobile interview sessions', () => {
     expect(parseMobileInterviewBackup({ activeSession: null, history: [finished], schedules: [schedule] }))
       .toMatchObject({ history: [finished], schedules: [schedule] });
     expect(parseMobileInterviewBackup({ activeSession: null, history: [finished] })?.schedules).toEqual([]);
+    const emptyQuestionStats = {
+      version: 2 as const,
+      questions: {},
+      attendanceEvents: [],
+      skippedEvents: [],
+      answerEvents: {},
+    };
     expect(mergeMobileInterviewBackups(
-      { activeSession: null, history: [finished], schedules: [schedule] },
-      { activeSession: null, history: [second], schedules: [{ ...schedule, id: 'schedule-2' }] },
+      { activeSession: null, history: [finished], schedules: [schedule], questionStats: emptyQuestionStats },
+      { activeSession: null, history: [second], schedules: [{ ...schedule, id: 'schedule-2' }], questionStats: emptyQuestionStats },
     )).toMatchObject({ history: [second, finished], schedules: [schedule, { ...schedule, id: 'schedule-2' }] });
     expect(parseMobileInterviewBackup({ activeSession: null, history: [{ id: 'invalid' }] })).toBeUndefined();
+  });
+
+  it('backs up and restores Mobile Interview attendance, correct, wrong, and skipped stats', () => {
+    const source = memoryStorage();
+    recordMobileInterviewQuestionAttendance(source, 'session-1', 'question-1');
+    recordMobileInterviewQuestionAnswerResult(source, 'session-1', 'question-1', 'incorrect');
+    recordMobileInterviewQuestionSkipped(source, 'session-2', 'question-1');
+    const backup = loadMobileInterviewBackup(source);
+    const destination = memoryStorage();
+
+    saveMobileInterviewBackup(destination, backup);
+
+    expect(loadMobileInterviewBackup(destination).questionStats).toEqual(backup.questionStats);
+    expect(loadMobileInterviewQuestionStats(destination)).toEqual({
+      'question-1': { attended: 1, correct: 0, wrong: 1, skipped: 1 },
+    });
+    expect(parseMobileInterviewBackup(backup)).toEqual(backup);
+  });
+
+  it('merges Mobile Interview stats by unique interview-question events', () => {
+    const firstDevice = memoryStorage();
+    recordMobileInterviewQuestionAttendance(firstDevice, 'shared-session', 'question-1');
+    recordMobileInterviewQuestionAnswerResult(firstDevice, 'shared-session', 'question-1', 'incorrect');
+    recordMobileInterviewQuestionSkipped(firstDevice, 'shared-session', 'question-2');
+
+    const secondDevice = memoryStorage();
+    recordMobileInterviewQuestionAttendance(secondDevice, 'shared-session', 'question-1');
+    recordMobileInterviewQuestionAnswerResult(secondDevice, 'shared-session', 'question-1', 'correct');
+    recordMobileInterviewQuestionSkipped(secondDevice, 'shared-session', 'question-2');
+    recordMobileInterviewQuestionAttendance(secondDevice, 'shared-session', 'question-2');
+    recordMobileInterviewQuestionAttendance(secondDevice, 'other-session', 'question-3');
+
+    const merged = mergeMobileInterviewBackups(
+      loadMobileInterviewBackup(firstDevice),
+      loadMobileInterviewBackup(secondDevice),
+    );
+    const restored = memoryStorage();
+    saveMobileInterviewBackup(restored, merged);
+
+    expect(loadMobileInterviewQuestionStats(restored)).toEqual({
+      'question-1': { attended: 1, correct: 1, wrong: 0, skipped: 0 },
+      'question-2': { attended: 1, correct: 0, wrong: 0, skipped: 0 },
+      'question-3': { attended: 1, correct: 0, wrong: 0, skipped: 0 },
+    });
   });
 
   it('validates independent calendar sessions', () => {

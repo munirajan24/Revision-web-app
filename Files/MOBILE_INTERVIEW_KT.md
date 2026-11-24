@@ -196,7 +196,7 @@ Mobile Interview state is stored in browser `localStorage` using these keys:
 
 Session serialization is validated by `parseMobileInterviewSession` before being trusted. It checks status, timing, active index, prompt structure and optional fields; malformed JSON or incompatible data is ignored rather than crashing the screen. Legacy sessions are normalized/migrated when loaded. History contains finished sessions and is ordered newest first.
 
-The app's backup integration in [`App.tsx`](../src/App.tsx) calls `loadMobileInterviewBackup` / `saveMobileInterviewBackup`. The current backup bundle includes active session, finished history, and schedules. The separate per-question statistics key is **not included** in that bundle; exporting/restoring the app backup does not currently carry those counters.
+The app's backup integration in [`App.tsx`](../src/App.tsx) calls `loadMobileInterviewBackup` / `saveMobileInterviewBackup`. The backup bundle includes the active session, finished history, schedules, and the complete per-question statistics record, including attendance/skip deduplication events and answer-result events. Both local JSON export/import and the optional manual Google Drive backup use this same full-app backup bundle. Restoring with **Merge / Add** merges statistics by unique session + prompt event, avoiding duplicate counts while retaining new events from either backup; when an answered question replaces a previous skip, attendance takes precedence over that skip.
 
 ### Per-question statistics
 
@@ -210,6 +210,7 @@ Counters are persisted independently from the active session:
 
 - Opening a question does **not** count as attendance.
 - Attendance is recorded when the learner submits/attempts an answer (including coding verification). Event keys are session ID + prompt ID, so repeat React effects/runs in the same interview do not double count the same visit.
+- Correct/wrong answer-result recording also ensures attendance and clears a previous skip atomically. A skipped event cannot be recorded again after attendance/result for the same session/prompt; skipped and attended are mutually exclusive for that event.
 - Correct/wrong is recorded when machine assessed (MCQ/coding) or when a short answer is self-assessed. Changing a short-answer assessment in that same session replaces its previous result rather than incrementing both.
 - Moving forward without answering records a skipped count once per session/prompt. If the learner later returns and answers it in that same session, the skip is removed and attendance is counted.
 - Starting another session permits a new attendance/result for the same question.
@@ -397,12 +398,12 @@ These are current behavior, not assumptions for new feature design:
 5. Coding verification is a single displayed-example output check, not hidden tests, and solution tests are not run automatically.
 6. General Q&A export includes typed answers, selected options, coding drafts, and the first/default generated coding reference solution. It does not include every alternative solution variant.
 7. Q&A export is available from recap, not as a general export action on the setup/home screen.
-8. Per-question statistics survive reloads but are not part of app backup export/import.
-9. Session/history/schedule/statistics data is local to the current browser origin; there is no account/cloud sync.
+8. Per-question statistics survive reloads and are included in full local and Google Drive app backups.
+9. Session/history/schedule/statistics data is stored in localStorage for the current browser origin. An optional manual Google Drive backup can copy and restore it across origins/devices; there is no automatic cloud sync.
 10. Calendar counts include completed/in-progress sessions by start date as well as future/unstarted schedules; a schedule attached to a session is not counted twice as a pending schedule.
 
 ## 17. AI handoff: short system-context block
 
 When asking another AI to change Mobile Interview, include this summary and point it to this document:
 
-> Mobile Interview is a lazy-loaded React feature in `src/components/MobileInterview.tsx`, routed by `src/App.tsx` as `?tab=mobile-interview`. Its bank is built from the local raw HTML parsed in `src/data/interview-question-bank.ts`, mapped/generated in `src/data/mobile-interview-bank.ts`, plus coding problems in `src/data/roadmap.ts`. Session domain logic and validation/persistence are in `src/engine/mobile-interview.ts`; coding editor/runners are in `src/components/CodingInterviewExperience.tsx`; output comparison is in `src/utils/output-comparison.ts`. Active session, history, schedules and question stats use separate localStorage keys. Full app backup includes active session/history/schedules, but not stats. Short answers are self-assessed; MCQs compare IDs; coding compares successful runner stdout with the first example only. Preserve timer deadline semantics (`endsAt`), per-prompt remaining time, session+prompt statistics deduplication, and parser/backup compatibility. Read `docs/MOBILE_INTERVIEW_KT.md` before proposing edits; add focused regression tests in the paired engine/bank test files and report any current limitation rather than assuming it exists.
+> Mobile Interview is a lazy-loaded React feature in `src/components/MobileInterview.tsx`, routed by `src/App.tsx` as `?tab=mobile-interview`. Its bank is built from the local raw HTML parsed in `src/data/interview-question-bank.ts`, mapped/generated in `src/data/mobile-interview-bank.ts`, plus coding problems in `src/data/roadmap.ts`. Session domain logic and validation/persistence are in `src/engine/mobile-interview.ts`; coding editor/runners are in `src/components/CodingInterviewExperience.tsx`; output comparison is in `src/utils/output-comparison.ts`. Active session, history, schedules and question stats use separate localStorage keys. Full app backups include all of these, including attendance/correct/wrong/skipped counters and event IDs; manual Google Drive backup uses the same full-app data. Short answers are self-assessed; MCQs compare IDs; coding compares successful runner stdout with the first example only. Preserve timer deadline semantics (`endsAt`), per-prompt remaining time, session+prompt statistics deduplication, and parser/backup compatibility. Read this document before proposing edits; add focused regression tests in the paired engine/bank test files and report any current limitation rather than assuming it exists.

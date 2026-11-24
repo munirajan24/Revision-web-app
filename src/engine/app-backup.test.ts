@@ -27,6 +27,13 @@ const state = {
   mobileInterview: {
     activeSession: null,
     history: [],
+    questionStats: {
+      version: 2 as const,
+      questions: { 'mobile-question-1': { attended: 3, correct: 2, wrong: 1, skipped: 1 } },
+      attendanceEvents: ['["session-1","mobile-question-1"]'],
+      skippedEvents: ['["session-2","mobile-question-1"]'],
+      answerEvents: { '["session-1","mobile-question-1"]': 'incorrect' as const },
+    },
     schedules: [{
       id: 'mobile-schedule-1',
       title: 'Kotlin mock interview',
@@ -52,6 +59,8 @@ describe('full application backup', () => {
     expect(parsed?.interviews).toEqual(state.interviews);
     expect(parsed?.jobApplications).toEqual(state.jobApplications);
     expect(parsed?.mobileInterview).toEqual(state.mobileInterview);
+    expect(parsed?.mobileInterview?.questionStats.questions['mobile-question-1'])
+      .toEqual({ attended: 3, correct: 2, wrong: 1, skipped: 1 });
   });
 
   it('imports the previous coding-only and revision-data backup formats', () => {

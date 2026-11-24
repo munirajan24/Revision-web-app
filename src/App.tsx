@@ -14,12 +14,15 @@ import { seedSkillChecklists } from './data/skill-checklists';
 import { loadInterviewStore, saveInterviewStore, type InterviewStore } from './engine/interviews';
 import { getJobApplicationProgress, getLocalDateKey, loadJobApplicationStore, saveJobApplicationStore, type JobApplicationStore } from './engine/job-applications';
 import { formatAppDate, formatAppDateTime } from './utils/date-format';
+import { loadGoogleIdentityServices, restoreGoogleDriveBackup, saveGoogleDriveBackup, signInToGoogleDrive, type GoogleDriveAccount } from './engine/google-drive-backup';
 
 const CompleteRevision = lazy(() => import('./components/CompleteRevision'));
 const SampleInterview = lazy(() => import('./components/SampleInterview'));
 const AndroidConceptPrep = lazy(() => import('./components/AndroidConceptPrep'));
 const AndroidQuickReview = lazy(() => import('./components/AndroidQuickReview'));
 const MobileInterview = lazy(() => import('./components/MobileInterview'));
+const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim() ?? '';
+const GOOGLE_ACCOUNT_EMAIL_KEY = 'kotlin-interview-trainer-google-account-email';
 
 type View = 'dashboard' | 'questions' | 'practice' | 'keywords' | 'reference' | 'analytics' | 'interviews' | 'complete-revision' | 'sample-interview' | 'mobile-interview' | 'android-concepts' | 'android-quick-review' | 'settings';
 type AppLanguage = 'kotlin' | 'java';
@@ -266,6 +269,12 @@ export default function App() {
   const [drafts, setDrafts] = useState<Record<number, string>>(initial.drafts);
   const [pendingProgressImport, setPendingProgressImport] = useState<{ fileName: string; backup: ParsedAppBackup } | null>(null);
   const [progressImportStatus, setProgressImportStatus] = useState('');
+  const [googleAccount, setGoogleAccount] = useState<GoogleDriveAccount | null>(null);
+  const [rememberedGoogleEmail, setRememberedGoogleEmail] = useState(() => localStorage.getItem(GOOGLE_ACCOUNT_EMAIL_KEY) ?? '');
+  const [googleIdentityReady, setGoogleIdentityReady] = useState(false);
+  const [googleBackupBusy, setGoogleBackupBusy] = useState(false);
+  const [googleBackupStatus, setGoogleBackupStatus] = useState('');
+  const [googleBackupError, setGoogleBackupError] = useState('');
   const [selectedProblemId, setSelectedProblemId] = useState(initial.selectedProblemId);
   const [mode, setMode] = useState<TrainingMode>(initial.mode);
   const [interviewStore, setInterviewStore] = useState<InterviewStore>(initialInterviewStore);
@@ -293,6 +302,17 @@ export default function App() {
   const editorRef = useRef<HTMLTextAreaElement | null>(null);
   const editorHighlightRef = useRef<HTMLPreElement | null>(null);
   const editorGutterRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!googleClientId) return;
+    let active = true;
+    loadGoogleIdentityServices().then(() => {
+      if (active) setGoogleIdentityReady(true);
+    }).catch((error: unknown) => {
+      if (active) setGoogleBackupError(error instanceof Error ? error.message : 'Google sign-in could not be loaded.');
+    });
+    return () => { active = false; };
+  }, []);
 
   const selectedProblem = getProblemById(selectedProblemId) ?? problems[0];
   const editorCode = drafts[selectedProblem.id] ?? '';
@@ -636,22 +656,24 @@ export default function App() {
     updateProgress(selectedProblemId, { notes, status: progress[selectedProblemId]?.status ?? 'learning' });
   };
 
+  const createCurrentBackup = (exportedAt = new Date()) => createAppBackup({
+    coding: {
+      progress: progress as unknown as Record<number, Record<string, unknown> & { important?: boolean; importance?: ProblemImportance | null }>,
+      drafts,
+      theme: theme as BackupTheme,
+      language,
+      selectedProblemId,
+      mode,
+    },
+    completeRevisionProgress: loadCompleteRevisionProgress(localStorage),
+    interviews: interviewStore,
+    jobApplications: jobApplicationStore,
+    mobileInterview: loadMobileInterviewBackup(localStorage),
+  }, exportedAt.toISOString());
+
   const exportProgress = () => {
     const exportedAt = new Date();
-    const backup = createAppBackup({
-      coding: {
-        progress: progress as unknown as Record<number, Record<string, unknown> & { important?: boolean; importance?: ProblemImportance | null }>,
-        drafts,
-        theme: theme as BackupTheme,
-        language,
-        selectedProblemId,
-        mode,
-      },
-      completeRevisionProgress: loadCompleteRevisionProgress(localStorage),
-      interviews: interviewStore,
-      jobApplications: jobApplicationStore,
-      mobileInterview: loadMobileInterviewBackup(localStorage),
-    }, exportedAt.toISOString());
+    const backup = createCurrentBackup(exportedAt);
     const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
@@ -661,6 +683,89 @@ export default function App() {
     anchor.click();
     anchor.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  const signInForGoogleBackup = async () => {
+    setGoogleBackupBusy(true);
+    setGoogleBackupError('');
+    setGoogleBackupStatus('');
+    try {
+      const account = await signInToGoogleDrive(googleClientId);
+      setGoogleAccount(account);
+      setRememberedGoogleEmail(account.email);
+      localStorage.setItem(GOOGLE_ACCOUNT_EMAIL_KEY, account.email);
+      setGoogleBackupStatus(`Signed in as ${account.email}.`);
+    } catch (error) {
+      setGoogleBackupError(error instanceof Error ? error.message : 'Google sign-in failed.');
+    } finally {
+      setGoogleBackupBusy(false);
+    }
+  };
+
+  const continueWithRememberedGoogleAccount = async () => {
+    setGoogleBackupBusy(true);
+    setGoogleBackupError('');
+    setGoogleBackupStatus('');
+    try {
+      const account = await signInToGoogleDrive(googleClientId, '');
+      setGoogleAccount(account);
+      setRememberedGoogleEmail(account.email);
+      localStorage.setItem(GOOGLE_ACCOUNT_EMAIL_KEY, account.email);
+      setGoogleBackupStatus(`Connected as ${account.email}.`);
+    } catch (error) {
+      setGoogleBackupError(error instanceof Error ? error.message : 'Could not reconnect to the remembered Google account. Try choosing the account again.');
+    } finally {
+      setGoogleBackupBusy(false);
+    }
+  };
+
+  const forgetGoogleAccount = () => {
+    setGoogleAccount(null);
+    setRememberedGoogleEmail('');
+    localStorage.removeItem(GOOGLE_ACCOUNT_EMAIL_KEY);
+    setGoogleBackupStatus('Logged out of Google Drive backup on this device.');
+    setGoogleBackupError('');
+  };
+
+  const handleGoogleDriveBackup = async () => {
+    setGoogleBackupBusy(true);
+    setGoogleBackupError('');
+    setGoogleBackupStatus('');
+    try {
+      const account = googleAccount && googleAccount.expiresAt > Date.now() + 60_000
+        ? googleAccount
+        : await signInToGoogleDrive(googleClientId, '');
+      setGoogleAccount(account);
+      await saveGoogleDriveBackup(account.accessToken, JSON.stringify(createCurrentBackup(), null, 2));
+      setGoogleBackupStatus(`Backup saved to Google Drive for ${account.email}.`);
+    } catch (error) {
+      setGoogleBackupError(error instanceof Error ? error.message : 'Google Drive backup failed.');
+    } finally {
+      setGoogleBackupBusy(false);
+    }
+  };
+
+  const handleGoogleDriveRestore = async () => {
+    setGoogleBackupBusy(true);
+    setGoogleBackupError('');
+    setGoogleBackupStatus('');
+    try {
+      const account = googleAccount && googleAccount.expiresAt > Date.now() + 60_000
+        ? googleAccount
+        : await signInToGoogleDrive(googleClientId, '');
+      setGoogleAccount(account);
+      const remoteBackup = await restoreGoogleDriveBackup(account.accessToken);
+      const backup = parseAppBackup(remoteBackup.serializedBackup, problems.map((problem) => problem.id));
+      if (!backup) {
+        throw new Error('The Google Drive backup is invalid or unsupported. No data was changed.');
+      }
+      setPendingProgressImport({ fileName: remoteBackup.fileName, backup });
+      setGoogleBackupStatus(`Backup loaded for ${account.email}. Choose Merge / Add or Replace to continue.`);
+    } catch (error) {
+      setGoogleBackupError(error instanceof Error ? error.message : 'Google Drive restore failed.');
+    } finally {
+      setGoogleBackupBusy(false);
+    }
   };
 
   const beginProgressImport = () => {
@@ -1528,9 +1633,55 @@ export default function App() {
             <section className="card section-panel">
               <h3>Data</h3>
               <div className="option-row stacked">
-                <button className="secondary-button" type="button" onClick={exportProgress}>Export Backup</button>
-                <button className="secondary-button" type="button" onClick={beginProgressImport}>Import Backup</button>
-                {progressImportStatus && <p className="progress-import-status" role="status">{progressImportStatus}</p>}
+                <div className="local-backup-panel">
+                  <h4>Local backup · This device</h4>
+                  <p>Export downloads a JSON file to this device. Import reads a JSON file from this device. These actions do not use Google Drive.</p>
+                  <div className="option-row google-backup-actions">
+                    <button className="secondary-button" type="button" onClick={exportProgress}>Export Local Backup</button>
+                    <button className="secondary-button" type="button" onClick={beginProgressImport}>Import Local Backup</button>
+                  </div>
+                  {progressImportStatus && <p className="progress-import-status" role="status">{progressImportStatus}</p>}
+                </div>
+                <div className="google-backup-panel">
+                  <h4>Google Drive backup · Cloud</h4>
+                  <p>Save or restore a private cloud copy in the signed-in Google account. Nothing syncs automatically; choose when to upload or download.</p>
+                  {!googleClientId
+                    ? <p className="progress-import-status">Google Drive backup needs a configured VITE_GOOGLE_CLIENT_ID.</p>
+                    : googleAccount
+                      ? <p className="progress-import-status">Signed in as {googleAccount.email}.</p>
+                      : rememberedGoogleEmail
+                        ? <p className="progress-import-status">Account remembered on this device: {rememberedGoogleEmail}. Access is requested again securely after refresh.</p>
+                      : null}
+                  {googleClientId && !googleAccount && rememberedGoogleEmail && (
+                    <div className="option-row google-backup-actions">
+                      <button className="secondary-button" type="button" disabled={!googleIdentityReady || googleBackupBusy} onClick={continueWithRememberedGoogleAccount}>
+                        {googleBackupBusy ? 'Connecting…' : `Continue as ${rememberedGoogleEmail}`}
+                      </button>
+                      <button className="text-action" type="button" disabled={googleBackupBusy} onClick={signInForGoogleBackup}>Choose another account</button>
+                      <button className="text-action" type="button" disabled={googleBackupBusy} onClick={forgetGoogleAccount}>Log out</button>
+                    </div>
+                  )}
+                  {googleClientId && !googleAccount && (
+                    rememberedGoogleEmail
+                      ? null
+                      : <button className="secondary-button" type="button" disabled={!googleIdentityReady || googleBackupBusy} onClick={signInForGoogleBackup}>
+                        {googleBackupBusy ? 'Connecting…' : 'Sign in with Google'}
+                      </button>
+                  )}
+                  {googleClientId && googleAccount && (
+                    <div className="option-row google-backup-actions">
+                      <button className="secondary-button" type="button" disabled={googleBackupBusy} onClick={handleGoogleDriveBackup}>
+                        {googleBackupBusy ? 'Working…' : 'Save to Google Drive'}
+                      </button>
+                      <button className="secondary-button" type="button" disabled={googleBackupBusy} onClick={handleGoogleDriveRestore}>
+                        Restore from Google Drive
+                      </button>
+                      <button className="text-action" type="button" disabled={googleBackupBusy} onClick={forgetGoogleAccount}>Log out</button>
+                    </div>
+                  )}
+                  {googleBackupStatus && <p className="progress-import-status" role="status">{googleBackupStatus}</p>}
+                  {googleBackupError && <p className="google-backup-error" role="alert">{googleBackupError}</p>}
+                </div>
                 <button className="danger-button" type="button" onClick={() => {
                   if (window.confirm('Reset all progress?')) {
                     setProgress(buildDefaultProgressMap());

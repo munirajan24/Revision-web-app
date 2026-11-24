@@ -1268,6 +1268,13 @@ textarea, input, select { background: var(--input); color: var(--text); border: 
 .chart-bar { height: 12px; border-radius: 999px; background: rgba(255,255,255,0.06); overflow: hidden; }
 .chart-bar span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--primary), var(--success)); }
 .option-row.stacked { flex-direction: column; align-items: flex-start; }
+.local-backup-panel, .google-backup-panel { display: grid; gap: 8px; width: 100%; padding: 14px; border: 1px solid var(--border); border-radius: 8px; background: color-mix(in srgb, var(--primary) 4%, var(--card)); }
+.local-backup-panel { background: color-mix(in srgb, var(--text) 3%, var(--card)); }
+.local-backup-panel h4, .local-backup-panel p, .google-backup-panel h4, .google-backup-panel p { margin: 0; }
+.local-backup-panel h4, .google-backup-panel h4 { font-size: 0.9rem; }
+.local-backup-panel > p:not(.progress-import-status), .google-backup-panel > p:not(.progress-import-status) { color: var(--muted); font-size: 0.78rem; line-height: 1.45; }
+.google-backup-actions { flex-wrap: wrap; }
+.google-backup-error { margin: 0; color: var(--danger); font-size: 0.78rem; line-height: 1.45; }
 .mode-switch {
   display: inline-flex;
   gap: 4px;

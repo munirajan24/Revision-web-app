@@ -103,7 +103,7 @@ export interface MobileInterviewQuestionStats {
   skipped: number;
 }
 
-interface StoredMobileInterviewQuestionStats {
+export interface MobileInterviewQuestionStatsBackup {
   version: 2;
   questions: Record<string, MobileInterviewQuestionStats>;
   attendanceEvents: string[];
@@ -111,15 +111,19 @@ interface StoredMobileInterviewQuestionStats {
   answerEvents: Record<string, 'correct' | 'incorrect'>;
 }
 
+function emptyMobileInterviewQuestionStats(): MobileInterviewQuestionStatsBackup {
+  return { version: 2, questions: {}, attendanceEvents: [], skippedEvents: [], answerEvents: {} };
+}
+
 function readStoredMobileInterviewQuestionStats(
   storage: Pick<Storage, 'getItem'>,
-): StoredMobileInterviewQuestionStats {
+): MobileInterviewQuestionStatsBackup {
   const stored = storage.getItem(MOBILE_INTERVIEW_QUESTION_STATS_STORAGE_KEY);
-  if (!stored) return { version: 2, questions: {}, attendanceEvents: [], skippedEvents: [], answerEvents: {} };
+  if (!stored) return emptyMobileInterviewQuestionStats();
   try {
     const parsed: unknown = JSON.parse(stored);
     if (!isRecord(parsed) || parsed.version !== 2 || !isRecord(parsed.questions)) {
-      return { version: 2, questions: {}, attendanceEvents: [], skippedEvents: [], answerEvents: {} };
+      return emptyMobileInterviewQuestionStats();
     }
     const questions: Record<string, MobileInterviewQuestionStats> = {};
     Object.entries(parsed.questions).forEach(([id, value]) => {
@@ -152,8 +156,62 @@ function readStoredMobileInterviewQuestionStats(
         : {},
     };
   } catch {
-    return { version: 2, questions: {}, attendanceEvents: [], skippedEvents: [], answerEvents: {} };
+    return emptyMobileInterviewQuestionStats();
   }
+}
+
+function parseMobileInterviewQuestionStatsBackup(value: unknown): MobileInterviewQuestionStatsBackup | undefined {
+  if (!isRecord(value) || value.version !== 2 || !isRecord(value.questions)
+    || !Array.isArray(value.attendanceEvents) || !value.attendanceEvents.every(isNonEmptyString)
+    || !Array.isArray(value.skippedEvents) || !value.skippedEvents.every(isNonEmptyString)
+    || !isRecord(value.answerEvents)) return undefined;
+
+  const parsed = readQuestionStatsRecord(value.questions);
+  if (!parsed) return undefined;
+  const answerEvents = Object.fromEntries(Object.entries(value.answerEvents).filter(
+    (entry): entry is [string, 'correct' | 'incorrect'] => entry[1] === 'correct' || entry[1] === 'incorrect',
+  ));
+  if (Object.keys(answerEvents).length !== Object.keys(value.answerEvents).length) return undefined;
+  return {
+    version: 2,
+    questions: parsed,
+    attendanceEvents: [...new Set(value.attendanceEvents as string[])],
+    skippedEvents: [...new Set(value.skippedEvents as string[])],
+    answerEvents,
+  };
+}
+
+function readQuestionStatsRecord(value: Record<string, unknown>): Record<string, MobileInterviewQuestionStats> | undefined {
+  const questions: Record<string, MobileInterviewQuestionStats> = {};
+  for (const [id, stats] of Object.entries(value)) {
+    if (!isRecord(stats)
+      || !isNonNegativeInteger(stats.attended)
+      || !isNonNegativeInteger(stats.correct)
+      || !isNonNegativeInteger(stats.wrong)
+      || !isNonNegativeInteger(stats.skipped)) return undefined;
+    questions[id] = {
+      attended: stats.attended,
+      correct: stats.correct,
+      wrong: stats.wrong,
+      skipped: stats.skipped,
+    };
+  }
+  return questions;
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0;
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0;
+}
+
+function saveMobileInterviewQuestionStats(
+  storage: Pick<Storage, 'setItem'>,
+  stats: MobileInterviewQuestionStatsBackup,
+): void {
+  storage.setItem(MOBILE_INTERVIEW_QUESTION_STATS_STORAGE_KEY, JSON.stringify(stats));
 }
 
 export function loadMobileInterviewQuestionStats(
@@ -169,19 +227,8 @@ export function recordMobileInterviewQuestionAttendance(
 ): Record<string, MobileInterviewQuestionStats> {
   const stored = readStoredMobileInterviewQuestionStats(storage);
   const eventId = JSON.stringify([sessionId, promptId]);
-  const alreadyAttended = stored.attendanceEvents.includes(eventId);
-  const skippedIndex = stored.skippedEvents.indexOf(eventId);
-  if (!alreadyAttended || skippedIndex !== -1) {
-    const current = stored.questions[promptId] ?? { attended: 0, correct: 0, wrong: 0, skipped: 0 };
-    stored.questions[promptId] = {
-      ...current,
-      attended: current.attended + (alreadyAttended ? 0 : 1),
-      skipped: current.skipped - (skippedIndex === -1 ? 0 : 1),
-    };
-    if (!alreadyAttended) stored.attendanceEvents.push(eventId);
-    if (skippedIndex !== -1) stored.skippedEvents.splice(skippedIndex, 1);
-    storage.setItem(MOBILE_INTERVIEW_QUESTION_STATS_STORAGE_KEY, JSON.stringify(stored));
-  }
+  const changed = markMobileInterviewQuestionAttended(stored, eventId, promptId);
+  if (changed) saveMobileInterviewQuestionStats(storage, stored);
   return stored.questions;
 }
 
@@ -193,6 +240,7 @@ export function recordMobileInterviewQuestionAnswerResult(
 ): Record<string, MobileInterviewQuestionStats> {
   const stored = readStoredMobileInterviewQuestionStats(storage);
   const eventId = JSON.stringify([sessionId, promptId]);
+  const attendanceChanged = markMobileInterviewQuestionAttended(stored, eventId, promptId);
   const previousResult = stored.answerEvents[eventId];
   if (previousResult !== result) {
     const current = stored.questions[promptId] ?? { attended: 0, correct: 0, wrong: 0, skipped: 0 };
@@ -202,7 +250,9 @@ export function recordMobileInterviewQuestionAnswerResult(
       wrong: current.wrong + (result === 'incorrect' ? 1 : 0) - (previousResult === 'incorrect' ? 1 : 0),
     };
     stored.answerEvents[eventId] = result;
-    storage.setItem(MOBILE_INTERVIEW_QUESTION_STATS_STORAGE_KEY, JSON.stringify(stored));
+    saveMobileInterviewQuestionStats(storage, stored);
+  } else if (attendanceChanged) {
+    saveMobileInterviewQuestionStats(storage, stored);
   }
   return stored.questions;
 }
@@ -214,13 +264,33 @@ export function recordMobileInterviewQuestionSkipped(
 ): Record<string, MobileInterviewQuestionStats> {
   const stored = readStoredMobileInterviewQuestionStats(storage);
   const eventId = JSON.stringify([sessionId, promptId]);
-  if (!stored.skippedEvents.includes(eventId)) {
+  if (!stored.attendanceEvents.includes(eventId) && !stored.answerEvents[eventId] && !stored.skippedEvents.includes(eventId)) {
     const current = stored.questions[promptId] ?? { attended: 0, correct: 0, wrong: 0, skipped: 0 };
     stored.questions[promptId] = { ...current, skipped: current.skipped + 1 };
     stored.skippedEvents.push(eventId);
-    storage.setItem(MOBILE_INTERVIEW_QUESTION_STATS_STORAGE_KEY, JSON.stringify(stored));
+    saveMobileInterviewQuestionStats(storage, stored);
   }
   return stored.questions;
+}
+
+function markMobileInterviewQuestionAttended(
+  stats: MobileInterviewQuestionStatsBackup,
+  eventId: string,
+  promptId: string,
+): boolean {
+  const alreadyAttended = stats.attendanceEvents.includes(eventId);
+  const skippedIndex = stats.skippedEvents.indexOf(eventId);
+  if (alreadyAttended && skippedIndex === -1) return false;
+
+  const current = stats.questions[promptId] ?? { attended: 0, correct: 0, wrong: 0, skipped: 0 };
+  stats.questions[promptId] = {
+    ...current,
+    attended: current.attended + (alreadyAttended ? 0 : 1),
+    skipped: current.skipped - (skippedIndex === -1 ? 0 : 1),
+  };
+  if (!alreadyAttended) stats.attendanceEvents.push(eventId);
+  if (skippedIndex !== -1) stats.skippedEvents.splice(skippedIndex, 1);
+  return true;
 }
 
 export function clearMobileInterviewQuestionStats(
@@ -647,6 +717,7 @@ export interface MobileInterviewBackup {
   activeSession: MobileInterviewSession | null;
   history: MobileInterviewSession[];
   schedules: MobileInterviewSchedule[];
+  questionStats: MobileInterviewQuestionStatsBackup;
 }
 
 export function loadMobileInterviewBackup(storage: Pick<Storage, 'getItem'>): MobileInterviewBackup {
@@ -654,6 +725,7 @@ export function loadMobileInterviewBackup(storage: Pick<Storage, 'getItem'>): Mo
     activeSession: loadMobileInterviewSession(storage),
     history: loadMobileInterviewHistory(storage),
     schedules: loadMobileInterviewSchedules(storage),
+    questionStats: readStoredMobileInterviewQuestionStats(storage),
   };
 }
 
@@ -664,6 +736,7 @@ export function saveMobileInterviewBackup(
   saveMobileInterviewSession(storage, backup.activeSession);
   saveMobileInterviewHistory(storage, backup.history);
   saveMobileInterviewSchedules(storage, backup.schedules);
+  saveMobileInterviewQuestionStats(storage, backup.questionStats);
 }
 
 export function parseMobileInterviewBackup(value: unknown): MobileInterviewBackup | undefined {
@@ -675,9 +748,17 @@ export function parseMobileInterviewBackup(value: unknown): MobileInterviewBacku
   const schedules = value.schedules === undefined
     ? []
     : Array.isArray(value.schedules) ? value.schedules.map(parseMobileInterviewSchedule) : undefined;
+  const questionStats = value.questionStats === undefined
+    ? emptyMobileInterviewQuestionStats()
+    : parseMobileInterviewQuestionStatsBackup(value.questionStats);
   if (!history.every((session) => session?.status === 'finished')
-    || !schedules || !schedules.every((schedule) => schedule !== undefined)) return undefined;
-  return { activeSession, history: history as MobileInterviewSession[], schedules: schedules as MobileInterviewSchedule[] };
+    || !schedules || !schedules.every((schedule) => schedule !== undefined) || !questionStats) return undefined;
+  return {
+    activeSession,
+    history: history as MobileInterviewSession[],
+    schedules: schedules as MobileInterviewSchedule[],
+    questionStats,
+  };
 }
 
 export function mergeMobileInterviewBackups(
@@ -692,7 +773,92 @@ export function mergeMobileInterviewBackups(
     activeSession: incoming.activeSession ?? current.activeSession,
     history: [...historyById.values()].sort((first, second) => (second.finishedAt ?? 0) - (first.finishedAt ?? 0)),
     schedules: [...schedulesById.values()].sort((first, second) => first.date.localeCompare(second.date)),
+    questionStats: mergeMobileInterviewQuestionStats(current.questionStats, incoming.questionStats),
   };
+}
+
+function mergeMobileInterviewQuestionStats(
+  current: MobileInterviewQuestionStatsBackup,
+  incoming: MobileInterviewQuestionStatsBackup,
+): MobileInterviewQuestionStatsBackup {
+  const attendanceEvents = [...new Set([...current.attendanceEvents, ...incoming.attendanceEvents])];
+  const attendedEvents = new Set(attendanceEvents);
+  const skippedEvents = [...new Set([...current.skippedEvents, ...incoming.skippedEvents])]
+    .filter((event) => !attendedEvents.has(event));
+  const answerEvents = { ...current.answerEvents, ...incoming.answerEvents };
+  const questions: Record<string, MobileInterviewQuestionStats> = {};
+  const questionIds = new Set([
+    ...Object.keys(current.questions),
+    ...Object.keys(incoming.questions),
+    ...attendanceEvents.map(getQuestionIdFromStatsEvent),
+    ...skippedEvents.map(getQuestionIdFromStatsEvent),
+    ...Object.keys(answerEvents).map(getQuestionIdFromStatsEvent),
+  ]);
+  questionIds.delete('');
+
+  questionIds.forEach((questionId) => {
+    const currentStats = current.questions[questionId] ?? emptyQuestionStats();
+    const incomingStats = incoming.questions[questionId] ?? emptyQuestionStats();
+    const currentEventStats = getQuestionEventStats(current, questionId);
+    const incomingEventStats = getQuestionEventStats(incoming, questionId);
+    const mergedEventStats = getQuestionEventStats({ version: 2, questions: {}, attendanceEvents, skippedEvents, answerEvents }, questionId);
+    questions[questionId] = {
+      attended: mergedEventStats.attended + Math.max(
+        currentStats.attended - currentEventStats.attended,
+        incomingStats.attended - incomingEventStats.attended,
+      ),
+      correct: mergedEventStats.correct + Math.max(
+        currentStats.correct - currentEventStats.correct,
+        incomingStats.correct - incomingEventStats.correct,
+      ),
+      wrong: mergedEventStats.wrong + Math.max(
+        currentStats.wrong - currentEventStats.wrong,
+        incomingStats.wrong - incomingEventStats.wrong,
+      ),
+      skipped: mergedEventStats.skipped + Math.max(
+        currentStats.skipped - currentEventStats.skipped,
+        incomingStats.skipped - incomingEventStats.skipped,
+      ),
+    };
+  });
+
+  return { version: 2, questions, attendanceEvents, skippedEvents, answerEvents };
+}
+
+function getQuestionEventStats(
+  stats: MobileInterviewQuestionStatsBackup,
+  questionId: string,
+): MobileInterviewQuestionStats {
+  let attended = 0;
+  let correct = 0;
+  let wrong = 0;
+  let skipped = 0;
+  stats.attendanceEvents.forEach((event) => {
+    if (getQuestionIdFromStatsEvent(event) === questionId) attended += 1;
+  });
+  stats.skippedEvents.forEach((event) => {
+    if (getQuestionIdFromStatsEvent(event) === questionId) skipped += 1;
+  });
+  Object.entries(stats.answerEvents).forEach(([event, result]) => {
+    if (getQuestionIdFromStatsEvent(event) === questionId) {
+      if (result === 'correct') correct += 1;
+      else wrong += 1;
+    }
+  });
+  return { attended, correct, wrong, skipped };
+}
+
+function getQuestionIdFromStatsEvent(event: string): string {
+  try {
+    const parsed: unknown = JSON.parse(event);
+    return Array.isArray(parsed) && parsed.length === 2 && typeof parsed[1] === 'string' ? parsed[1] : '';
+  } catch {
+    return '';
+  }
+}
+
+function emptyQuestionStats(): MobileInterviewQuestionStats {
+  return { attended: 0, correct: 0, wrong: 0, skipped: 0 };
 }
 
 export function loadMobileInterviewSchedules(storage: Pick<Storage, 'getItem'>): MobileInterviewSchedule[] {

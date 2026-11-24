@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { interviewQuestions } from './interview-question-bank';
 import { getMobileCodingQuestionBank, getMobileQuestionBank, getMobileQuestionSets } from './mobile-interview-bank';
+import { getProblemExamples, getProblemSolutions, problems } from './roadmap';
 
 describe('mobile interview question bank', () => {
   const questions = getMobileQuestionBank();
@@ -67,7 +68,38 @@ describe('mobile interview question bank', () => {
       codingProblemId: 1,
       codingLanguage: 'kotlin',
     });
+    expect(codingQuestions[0].answer).toBeTruthy();
     expect(codingSets.find((set) => set.title === 'Kotlin Coding')?.sections[0].questionCount).toBe(120);
+  });
+
+  it('returns the missing number as a scalar in both language references', () => {
+    const problem = problems.find((item) => item.id === 24);
+
+    expect(problem?.title).toBe('Find missing number from 1 to N');
+    expect(problem && getProblemExamples(problem)).toEqual([
+      { input: '[1, 2, 4, 5]', output: '3' },
+    ]);
+    expect(problem && getProblemSolutions(problem, 'kotlin')[0].code).toContain('): Int');
+    expect(problem && getProblemSolutions(problem, 'kotlin')[0].code).toContain('expectedSum - actualSum');
+    expect(problem && getProblemSolutions(problem, 'java')[0].code).toContain('public static int findMissingNumberFrom1ToN');
+  });
+
+  it('uses examples whose outputs match the described roadmap operation', () => {
+    const exampleFor = (id: number) => getProblemExamples(problems.find((problem) => problem.id === id)!)[0];
+
+    expect(exampleFor(20)).toEqual({ input: '[1, 2, 3, 4]', output: '[4, 3, 2, 1]' });
+    expect(exampleFor(23)).toEqual({ input: '[1, 2, 2, 3]', output: '[2]' });
+    expect(exampleFor(36)).toEqual({ input: '"banana"', output: '{b=1, a=3, n=2}' });
+    expect(exampleFor(39)).toEqual({ input: '[1, 2, 2, 3]', output: '[2]' });
+    expect(exampleFor(44)).toEqual({ input: '"banana"', output: '"a"' });
+    expect(exampleFor(52)).toEqual({ input: 'expected = "abcde", actual = "abce"', output: 'd' });
+    expect(exampleFor(64)).toEqual({ input: '"cat dog cat bird dog cat"', output: '["cat", "dog", "bird"]' });
+    expect(exampleFor(89)).toEqual({ input: '["eat", "tea", "tan"]', output: '{aet=[eat, tea], ant=[tan]}' });
+    expect(exampleFor(83)).toEqual({ input: '"banana"', output: '[b, a, n]' });
+    expect(exampleFor(31)).toEqual({ input: 'numbers = [2, 7, 11, 15], target = 9', output: '[[2, 7]]' });
+    expect(exampleFor(68)).toEqual({ input: 'numbers = [1, 4, 9, 12], target = 6', output: '4' });
+    expect(exampleFor(101)).toEqual({ input: '1 -> 2 -> 3 -> null', output: '[3, 2, 1]' });
+    expect(exampleFor(105)).toEqual({ input: 'numbers = [1, 3, 5, 7], target = 5', output: '2' });
   });
 
   it('routes the Programming Kotlin and Java coding sections to the coding experience', () => {

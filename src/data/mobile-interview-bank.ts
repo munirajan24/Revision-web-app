@@ -241,7 +241,7 @@ export function getMobileCodingQuestionBank(): MobileBankQuestion[] {
       sectionTitle: `${language === 'kotlin' ? 'Kotlin' : 'Java'} Coding`,
       source: 'Complete Revision' as const,
       text: problem.title,
-      answer: '',
+      answer: solutions[language][0].code,
       codingProblemId: problem.id,
       codingLanguage: language,
     }));

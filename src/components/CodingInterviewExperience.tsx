@@ -1,8 +1,9 @@
 import { Component, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties, ErrorInfo, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, ReactNode } from 'react';
+import type { CSSProperties, ErrorInfo, KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
 import type { KotlinCodeMirror, KotlinPlaygroundInstance } from 'kotlin-playground';
-import type { MobileInterviewPrompt } from '../engine/mobile-interview';
+import type { MobileCodingVerification, TimedMobileInterviewPrompt } from '../engine/mobile-interview';
 import type { MobileCodingQuestion } from '../data/mobile-interview-bank';
+import { outputsMatch } from '../utils/output-comparison';
 import {
   getProblemExamples,
   getProblemSolutions,
@@ -13,12 +14,15 @@ import {
 } from '../data/roadmap';
 
 interface CodingInterviewExperienceProps {
-  prompt: MobileInterviewPrompt;
+  prompt: TimedMobileInterviewPrompt;
   codingQuestion?: MobileCodingQuestion;
   paused: boolean;
   answerOpen: boolean;
-  onPromptChange: (update: Partial<MobileInterviewPrompt>) => void;
+  onPromptChange: (update: Partial<TimedMobileInterviewPrompt>) => void;
   onSubmit: () => void;
+  onVerificationResult: (result: 'correct' | 'incorrect') => void;
+  onRetryWithExtraTime: () => void;
+  onViewAnswer: () => void;
   onHideAnswer: () => void;
   onNext: () => void;
   onTrySolution: (code: string) => void;
@@ -78,7 +82,7 @@ const JUDGE0_URL = 'https://ce.judge0.com';
 const JUDGE0_REQUEST_TIMEOUT_MS = 15_000;
 const KOTLIN_EXECUTION_TIMEOUT_MS = 10_000;
 const SHARED_SYMBOLS = [
-  'Tab', '{', '}', '(', ')', '[', ']', '<', '>', ';', ':', '"', "'", '=', '+', '-', '*', '/', '.', ',', '!', '&', '|', '?', '_',
+  'Tab', '{', '}', '(', ')', '=', ';', '"', "'", '[', ']', '<', '>', ':', '+', '-', '*', '/', '.', ',', '!', '&', '|', '?', '_',
 ];
 const LANGUAGE_SYMBOLS: Record<SolutionLanguage, string[]> = {
   kotlin: ['->', '$', '?.', '?:', '!!'],
@@ -87,6 +91,26 @@ const LANGUAGE_SYMBOLS: Record<SolutionLanguage, string[]> = {
 
 let javaLanguagePromise: Promise<JudgeLanguage> | undefined;
 
+type CodingIconName = 'close' | 'collapse' | 'copy' | 'expand';
+
+function CodingIcon({ name }: { name: CodingIconName }) {
+  const paths: Record<CodingIconName, ReactNode> = {
+    close: <path d="m6 6 12 12M18 6 6 18" />,
+    collapse: <path d="m7 14 5-5 5 5" />,
+    copy: <><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3" /></>,
+    expand: <path d="m7 10 5 5 5-5" />,
+  };
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
+}
+
+function IconAction({ icon, label, title, onClick }: { icon: CodingIconName; label: string; title: string; onClick: () => void }) {
+  return (
+    <button className="mobile-coding-icon-button" type="button" onClick={onClick} aria-label={label} title={title}>
+      <CodingIcon name={icon} />
+    </button>
+  );
+}
+
 export default function CodingInterviewExperience({
   prompt,
   codingQuestion,
@@ -94,6 +118,9 @@ export default function CodingInterviewExperience({
   answerOpen,
   onPromptChange,
   onSubmit,
+  onVerificationResult,
+  onRetryWithExtraTime,
+  onViewAnswer,
   onHideAnswer,
   onNext,
   onTrySolution,
@@ -117,17 +144,34 @@ export default function CodingInterviewExperience({
   const problemDescription = problem?.description ?? codingQuestion?.description ?? prompt.text;
   const expectedOutput = examples[0]?.output;
   const [keyboardInset, setKeyboardInset] = useState(0);
+  const [editorFocused, setEditorFocused] = useState(false);
   const problemCollapsed = prompt.codingProblemCollapsed ?? false;
   const [problemCardSticky, setProblemCardSticky] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
-  const [outputOpen, setOutputOpen] = useState(false);
-  const [result, setResult] = useState<CodingRunResult | null>(null);
+  const [outputPromptId, setOutputPromptId] = useState<string | null>(null);
+  const [result, setResult] = useState<CodingRunResult | null>(() => prompt.codingVerification
+    ? {
+        status: prompt.codingVerification.status === 'unavailable' ? 'Runner unavailable' : 'Success',
+        output: prompt.codingVerification.output,
+        ...(prompt.codingVerification.status !== 'unavailable'
+          ? { matchesExpected: prompt.codingVerification.status === 'correct' }
+          : {}),
+        ...(prompt.codingVerification.message ? { message: prompt.codingVerification.message } : {}),
+        ...(prompt.codingVerification.stderr ? { stderr: prompt.codingVerification.stderr } : {}),
+      }
+    : null);
   const [runnerLoadError, setRunnerLoadError] = useState('');
   const [editorReady, setEditorReady] = useState(false);
   const [editorResetKey, setEditorResetKey] = useState(0);
+  const [editorSize, setEditorSize] = useState<'normal' | 'big'>('normal');
   const [solutionIndices, setSolutionIndices] = useState<Partial<Record<SolutionLanguage, number>>>({});
   const [answerCollapsed, setAnswerCollapsed] = useState(true);
   const [answerCopyNotice, setAnswerCopyNotice] = useState('');
+  const [verificationOpen, setVerificationOpen] = useState(false);
+  const [verificationDialogPromptId, setVerificationDialogPromptId] = useState<string | null>(null);
+  const [copyNotice, setCopyNotice] = useState('');
+  const [verificationRetrying, setVerificationRetrying] = useState(false);
+  const [solutionPreviewActive, setSolutionPreviewActive] = useState(false);
   const hostRef = useRef<HTMLDivElement | null>(null);
   const textAreaRef = useRef<HTMLTextAreaElement | null>(null);
   const problemCardRef = useRef<HTMLElement | null>(null);
@@ -138,14 +182,29 @@ export default function CodingInterviewExperience({
   const runTokenRef = useRef(0);
   const abortControllerRef = useRef<AbortController | null>(null);
   const timeoutTriggeredRef = useRef(false);
+  const verificationPromptRef = useRef<string | null>(null);
+  const autoVerifyPromptRef = useRef<string | null>(null);
+  const onVerificationResultRef = useRef(onVerificationResult);
+  const editorPaused = paused && !solutionPreviewActive;
+  const canRetryWithExtraTime = prompt.timeExpired && !prompt.codingRetryUsed;
 
   const saveCode = useCallback((value: string) => {
+    setResult(null);
     onPromptChange({
       codingAnswers: { ...prompt.codingAnswers, [language]: value },
+      codingVerification: undefined,
+      answerResult: undefined,
     });
   }, [language, onPromptChange, prompt.codingAnswers]);
   onCodeChangeRef.current = saveCode;
   currentCodeRef.current = code;
+  onVerificationResultRef.current = onVerificationResult;
+
+  useEffect(() => {
+    if (!copyNotice) return undefined;
+    const timeout = window.setTimeout(() => setCopyNotice(''), 2400);
+    return () => window.clearTimeout(timeout);
+  }, [copyNotice]);
 
   useEffect(() => {
     const updateKeyboardInset = () => {
@@ -241,6 +300,8 @@ export default function CodingInterviewExperience({
           return;
         }
         if (!instance) throw new Error('Kotlin Playground did not create an editor instance.');
+        const playgroundWrapper = host.querySelector<HTMLElement>('.executable-fragment-wrapper');
+        if (playgroundWrapper) playgroundWrapper.style.marginBottom = '0';
         kotlinInstanceRef.current = instance;
         const editor = instance.codemirror;
         codeMirrorRef.current = editor;
@@ -280,8 +341,14 @@ export default function CodingInterviewExperience({
   }, [code, language]);
 
   useEffect(() => {
-    codeMirrorRef.current?.setOption('readOnly', paused);
-  }, [paused, language]);
+    if (!solutionPreviewActive) return;
+    if (language === 'kotlin') codeMirrorRef.current?.focus();
+    else textAreaRef.current?.focus();
+  }, [code, language, solutionPreviewActive]);
+
+  useEffect(() => {
+    codeMirrorRef.current?.setOption('readOnly', editorPaused);
+  }, [editorPaused, language]);
 
   useEffect(() => {
     setSolutionIndices({});
@@ -366,17 +433,6 @@ export default function CodingInterviewExperience({
     }
   };
 
-  const onToolbarPointerDown = (event: ReactPointerEvent<HTMLButtonElement>, action: () => void) => {
-    if (event.button !== 0) return;
-    event.preventDefault();
-    action();
-  };
-
-  const onKeyboardToolbarClick = (event: ReactMouseEvent<HTMLButtonElement>, action: () => void) => {
-    if (event.detail !== 0) return;
-    action();
-  };
-
   const insertSymbol = (symbol: string) => {
     if (symbol === 'Tab') {
       insertAtCursor('    ');
@@ -388,18 +444,21 @@ export default function CodingInterviewExperience({
 
   const runCode = async () => {
     if (!code.trim()) {
-      setOutputOpen(true);
-      setResult({ status: 'Runtime error', output: '', message: 'Write some code first.' });
+      setOutputPromptId(prompt.id);
+      setResult({ status: 'Runtime error', output: '', message: 'No code was entered, so there is nothing to run.' });
       return;
     }
+    if (verificationPromptRef.current !== prompt.id) {
+      onPromptChange({ codingVerification: undefined, answerResult: undefined });
+    }
     if (!navigator.onLine) {
-      setOutputOpen(true);
+      setOutputPromptId(prompt.id);
       setResult({ status: 'Offline', output: '', message: 'You appear to be offline. Code running needs a connection.' });
       return;
     }
     const token = ++runTokenRef.current;
     setIsRunning(true);
-    setOutputOpen(true);
+    setOutputPromptId(prompt.id);
     setResult({ status: 'Running…', output: '' });
     const startedAt = performance.now();
     timeoutTriggeredRef.current = false;
@@ -418,7 +477,7 @@ export default function CodingInterviewExperience({
       try {
         if (instance.getCode().trim() === '') {
           setIsRunning(false);
-          setResult({ status: 'Runtime error', output: '', message: 'Write some code first.' });
+          setResult({ status: 'Runtime error', output: '', message: 'No code to check yet. Add your solution in the editor, then try again.' });
           return;
         }
         instance.execute();
@@ -455,7 +514,7 @@ export default function CodingInterviewExperience({
           ...(exception ? { stderr: exception } : {}),
           durationMs: Math.round(performance.now() - startedAt),
           ...(status === 'Success' && expectedOutput !== undefined
-            ? { matchesExpected: output.trim() === expectedOutput.trim() }
+            ? { matchesExpected: outputsMatch(output, expectedOutput) }
             : {}),
         });
       } catch (error) {
@@ -523,7 +582,7 @@ export default function CodingInterviewExperience({
         ...(stderr ? { stderr } : {}),
         durationMs: Math.round(performance.now() - startedAt),
         ...(status === 'Success' && expectedOutput !== undefined
-          ? { matchesExpected: output.trim() === expectedOutput.trim() }
+          ? { matchesExpected: outputsMatch(output, expectedOutput) }
           : {}),
         ...(status === 'Timed out' ? { message: 'Timed out. Check for an infinite loop.' } : {}),
       });
@@ -577,6 +636,126 @@ export default function CodingInterviewExperience({
     if (language === 'kotlin') setEditorResetKey((current) => current + 1);
   };
 
+  const handleSubmit = () => {
+    verificationPromptRef.current = prompt.id;
+    autoVerifyPromptRef.current = prompt.id;
+    setVerificationDialogPromptId(prompt.id);
+    setVerificationRetrying(false);
+    onPromptChange({ codingVerification: undefined, answerResult: undefined });
+    setVerificationOpen(true);
+    onSubmit();
+    if (code.trim()) void runCode();
+    else setResult(null);
+  };
+
+  const retryVerification = () => {
+    verificationPromptRef.current = prompt.id;
+    setVerificationDialogPromptId(prompt.id);
+    setVerificationRetrying(true);
+    onPromptChange({ codingVerification: undefined, answerResult: undefined });
+    if (code.trim()) void runCode();
+    else setResult(null);
+  };
+
+  const retryWithExtraTime = () => {
+    autoVerifyPromptRef.current = null;
+    verificationPromptRef.current = null;
+    setVerificationOpen(false);
+    setVerificationDialogPromptId(null);
+    setVerificationRetrying(false);
+    setOutputPromptId(null);
+    setResult(null);
+    onRetryWithExtraTime();
+  };
+
+  const getQuestionDetails = () => [
+    `Question: ${problemTitle}`,
+    problemDescription ? `Description:\n${problemDescription}` : '',
+    examples.length > 0
+      ? `Examples:\n${examples.map((example, index) => (
+          `${examples.length > 1 ? `Example ${index + 1}\n` : ''}Input: ${example.input}\nExpected output: ${example.output}`
+        )).join('\n\n')}`
+      : '',
+  ].filter(Boolean).join('\n\n');
+
+  const getRunDetails = () => [
+    getQuestionDetails(),
+    `Language: ${language === 'kotlin' ? 'Kotlin' : 'Java'}`,
+    `Written code:\n${code.trim() || '(no code entered)'}`,
+    result ? `Run status: ${result.status}` : '',
+    result?.matchesExpected !== undefined ? `Verification: ${result.matchesExpected ? 'Correct' : 'Incorrect'}` : '',
+    result?.output ? `Program output:\n${result.output.trim()}` : '',
+    result?.stderr ? `Error details:\n${result.stderr.trim()}` : '',
+    result?.message ? `Runner message:\n${result.message}` : '',
+    prompt.codingStdin ? `Input (stdin):\n${prompt.codingStdin}` : '',
+  ].filter(Boolean).join('\n\n');
+
+  const copyText = async (text: string, successMessage: string) => {
+    try {
+      await copyToClipboard(text);
+      setCopyNotice(successMessage);
+    } catch (error) {
+      console.error('Could not copy coding interview text.', error);
+      setCopyNotice('Could not copy. Please select and copy the text manually.');
+    }
+  };
+
+  useEffect(() => {
+    setOutputPromptId(null);
+    setVerificationOpen(false);
+    setVerificationDialogPromptId(null);
+    setSolutionPreviewActive(false);
+    verificationPromptRef.current = null;
+    autoVerifyPromptRef.current = null;
+    setResult(prompt.codingVerification
+      ? {
+          status: prompt.codingVerification.status === 'unavailable' ? 'Runner unavailable' : 'Success',
+          output: prompt.codingVerification.output,
+          ...(prompt.codingVerification.status !== 'unavailable'
+            ? { matchesExpected: prompt.codingVerification.status === 'correct' }
+            : {}),
+          ...(prompt.codingVerification.message ? { message: prompt.codingVerification.message } : {}),
+          ...(prompt.codingVerification.stderr ? { stderr: prompt.codingVerification.stderr } : {}),
+        }
+      : null);
+  }, [prompt.id]);
+
+  useEffect(() => {
+    if (!prompt.timeExpired || prompt.codingVerification || autoVerifyPromptRef.current === prompt.id) return;
+    autoVerifyPromptRef.current = prompt.id;
+    verificationPromptRef.current = prompt.id;
+    setVerificationDialogPromptId(prompt.id);
+    setVerificationRetrying(false);
+    setVerificationOpen(true);
+    if (code.trim()) void runCode();
+    else setResult(null);
+  }, [prompt.id, prompt.timeExpired, prompt.codingVerification, code]);
+
+  useEffect(() => {
+    if (verificationPromptRef.current !== prompt.id || !result || result.status === 'Running…') return;
+    if (result?.status === 'Success' && result.matchesExpected !== undefined) {
+      const status = result.matchesExpected ? 'correct' : 'incorrect';
+      onPromptChange({
+        codingVerification: {
+          status,
+          output: result.output,
+        },
+      });
+      onVerificationResultRef.current(status);
+    } else {
+      onPromptChange({
+        codingVerification: {
+          status: 'unavailable',
+          output: result.output,
+          ...(result.message ? { message: result.message } : {}),
+          ...(result.stderr ? { stderr: result.stderr } : {}),
+        },
+      });
+    }
+    verificationPromptRef.current = null;
+    setVerificationRetrying(false);
+  }, [onPromptChange, prompt.id, result]);
+
   const insertTemplate = () => {
     if (code.trim() && !window.confirm('Replace the code you have typed with a runnable template?')) return;
     saveCode(getTemplate(language, problemTitle));
@@ -598,6 +777,27 @@ export default function CodingInterviewExperience({
 
   const activeSolutions = solutions[language];
   const selectedSolution = activeSolutions[solutionIndices[language] ?? 0] ?? activeSolutions[0];
+
+  const openReferenceAnswer = () => {
+    setVerificationOpen(false);
+    onViewAnswer();
+  };
+
+  const closeReferenceAnswer = () => {
+    setVerificationOpen(true);
+    onHideAnswer();
+  };
+
+  const tryReferenceSolution = () => {
+    if (!selectedSolution) return;
+    onTrySolution(makeRunnableSolution(selectedSolution.code, language));
+    setSolutionPreviewActive(true);
+    setVerificationOpen(false);
+    setOutputPromptId(null);
+    setResult(null);
+    verificationPromptRef.current = null;
+  };
+
   const codeStyle = { '--mobile-coding-keyboard-inset': `${keyboardInset}px` } as CSSProperties;
 
   if (!problem && !codingQuestion) {
@@ -610,19 +810,37 @@ export default function CodingInterviewExperience({
   }
 
   return (
-    <section className={`mobile-coding-experience${answerOpen ? ' is-answer-open' : ''}`} style={codeStyle}>
+    <section className={`mobile-coding-experience${answerOpen ? ' is-answer-open' : ''}${editorFocused ? ' is-editor-focused' : ''}`} style={codeStyle}>
       <article
         ref={problemCardRef}
         className={`mobile-coding-problem${problemCollapsed ? ' is-collapsed' : ''}${problemCardSticky ? ' is-sticky' : ''}`}
       >
         <header>
-          <div>
-            <span className="mobile-coding-eyebrow">{problem ? `${problem.difficulty} · ${problem.levelTitle}` : `${language === 'kotlin' ? 'Kotlin' : 'Java'} Coding`}</span>
+          <div className="mobile-coding-problem-heading">
+            {problem && <span className="mobile-coding-eyebrow">{problem.difficulty} · {problem.levelTitle}</span>}
             <h3>{problemTitle}</h3>
           </div>
-          <button className="mobile-coding-small-button" type="button" onClick={setCollapsed} aria-expanded={!problemCollapsed}>
-            {problemCollapsed ? 'Expand' : 'Collapse'}
-          </button>
+          <div className="mobile-coding-problem-actions">
+            <button
+              className="mobile-coding-icon-button"
+              type="button"
+              onClick={() => void copyText(getQuestionDetails(), 'Question and examples copied.')}
+              aria-label="Copy question and examples"
+              title="Copy question"
+            >
+              <CodingIcon name="copy" />
+            </button>
+            <button
+              className="mobile-coding-icon-button"
+              type="button"
+              onClick={setCollapsed}
+              aria-expanded={!problemCollapsed}
+              aria-label={problemCollapsed ? 'Expand question details' : 'Collapse question details'}
+              title={problemCollapsed ? 'Expand question details' : 'Collapse question details'}
+            >
+              <CodingIcon name={problemCollapsed ? 'expand' : 'collapse'} />
+            </button>
+          </div>
         </header>
         {!problemCollapsed && (
           <div className="mobile-coding-problem-content">
@@ -638,26 +856,48 @@ export default function CodingInterviewExperience({
         )}
       </article>
 
-      <div className="mobile-coding-language-switch" role="group" aria-label="Editor language">
-        {(['kotlin', 'java'] as const).map((option) => (
-          <button
-            key={option}
-            type="button"
-            className={language === option ? 'is-selected' : ''}
-            aria-pressed={language === option}
-            onClick={() => setLanguage(option)}
-          >
-            {option === 'kotlin' ? 'Kotlin' : 'Java'}
-          </button>
-        ))}
+      <div className="mobile-coding-editor-toolbar">
+        <div className="mobile-coding-language-switch" role="group" aria-label="Editor language">
+          {(['kotlin', 'java'] as const).map((option) => (
+            <button
+              key={option}
+              type="button"
+              className={language === option ? 'is-selected' : ''}
+              aria-pressed={language === option}
+              onClick={() => setLanguage(option)}
+            >
+              {option === 'kotlin' ? 'Kotlin' : 'Java'}
+            </button>
+          ))}
+        </div>
+        <div className="mobile-coding-language-switch mobile-coding-size-switch" role="group" aria-label="Playground size">
+          {(['normal', 'big'] as const).map((size) => (
+            <button
+              key={size}
+              type="button"
+              className={editorSize === size ? 'is-selected' : ''}
+              aria-pressed={editorSize === size}
+              onClick={() => setEditorSize(size)}
+            >
+              {size === 'normal' ? 'Normal' : 'Big'}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <section className="mobile-coding-editor-shell" aria-label={`${language === 'kotlin' ? 'Kotlin' : 'Java'} code editor`}>
+      <section
+        className={`mobile-coding-editor-shell${editorSize === 'big' ? ' is-big' : ''}`}
+        aria-label={`${language === 'kotlin' ? 'Kotlin' : 'Java'} code editor`}
+        onFocus={() => setEditorFocused(true)}
+        onBlur={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setEditorFocused(false);
+        }}
+      >
         {language === 'kotlin' ? (
           <>
             <div className={`mobile-coding-kotlin-editor${editorReady ? ' is-ready' : ''}`}>
               <div ref={hostRef} className="mobile-coding-kotlin-host" />
-              {editorReady && !code.trim() && <span className="mobile-coding-kotlin-placeholder">Write code or explain your approach…</span>}
+              {editorReady && !code.trim() && <span className="mobile-coding-kotlin-placeholder">Write your code here…</span>}
               {!editorReady && !runnerLoadError && <p className="mobile-coding-editor-loading" role="status">Loading Kotlin editor…</p>}
               {runnerLoadError && (
                 <div className="mobile-coding-runner-fallback">
@@ -665,7 +905,6 @@ export default function CodingInterviewExperience({
                   <textarea
                     value={code}
                     onChange={(event) => saveCode(event.target.value)}
-                    onFocus={() => undefined}
                     spellCheck={false}
                     autoCapitalize="off"
                     autoCorrect="off"
@@ -684,8 +923,7 @@ export default function CodingInterviewExperience({
             value={code}
             onChange={(event) => updateJavaCode(event.target.value)}
             onKeyDown={onJavaKeyDown}
-            onFocus={() => undefined}
-            placeholder="Write code or explain your approach…"
+            placeholder="Write your code here…"
             spellCheck={false}
             autoCapitalize="off"
             autoCorrect="off"
@@ -693,36 +931,63 @@ export default function CodingInterviewExperience({
             inputMode="text"
             enterKeyHint="enter"
             aria-label="Java code editor"
-            disabled={paused}
+            disabled={editorPaused}
           />
         )}
       </section>
 
       <div className="mobile-coding-action-row">
-        <button type="button" className="secondary-button" onClick={insertTemplate} disabled={paused}>Insert template</button>
-        <button type="button" className="secondary-button" onClick={resetCode} disabled={paused}>Reset</button>
-        <button type="button" className="primary-button mobile-interview-submit" onClick={onSubmit} disabled={paused}>Submit</button>
+        <div className="mobile-coding-primary-actions">
+          <button type="button" className="primary-button" onClick={() => void runCode()} disabled={editorPaused || isRunning || !code.trim()}>
+            {isRunning ? 'Running…' : 'Run'}
+          </button>
+          <button type="button" className="primary-button mobile-interview-submit" onClick={handleSubmit} disabled={paused || isRunning}>
+            Submit
+          </button>
+        </div>
+        <div className={`mobile-coding-secondary-actions${code.trim() ? ' has-code' : ''}`}>
+          {code.trim() && (
+            <button
+              type="button"
+              className="mobile-coding-icon-button"
+              onClick={() => void copyText(code, 'Your code was copied.')}
+              aria-label="Copy written code"
+              title="Copy code"
+            >
+              <CodingIcon name="copy" />
+            </button>
+          )}
+          <button type="button" className="secondary-button" onClick={insertTemplate} disabled={editorPaused}>Insert template</button>
+          <button type="button" className="secondary-button" onClick={resetCode} disabled={editorPaused}>Clear</button>
+        </div>
       </div>
-
-      {!code.trim() && <p className="mobile-coding-empty-hint">Write some code first.</p>}
+      {copyNotice && <p className="mobile-coding-copy-notice" role="status" aria-live="polite">{copyNotice}</p>}
 
       <div className="mobile-coding-bottom-space" aria-hidden="true" />
 
-      {outputOpen && (
+      {outputPromptId === prompt.id && (
         <section className="mobile-coding-output-drawer" role="region" aria-label="Program output">
           <header>
             <div>
               <strong>Output</strong>
               {result && <span className={`mobile-coding-status is-${statusClass(result.status)}`} aria-live="polite">{result.status}{result.durationMs !== undefined ? ` · ${formatDuration(result.durationMs)}` : ''}</span>}
             </div>
-            <button type="button" className="mobile-coding-small-button" onClick={() => setOutputOpen(false)} aria-label="Close output">Close</button>
+            <div className="mobile-coding-output-actions">
+              {result && <IconAction icon="copy" label="Copy question, code, output, and errors" title="Copy all" onClick={() => void copyText(getRunDetails(), 'Question, code, output, and errors copied.')} />}
+              <IconAction icon="close" label="Close program output" title="Close output" onClick={() => setOutputPromptId(null)} />
+            </div>
           </header>
+          {copyNotice && <p className="mobile-coding-copy-notice" role="status">{copyNotice}</p>}
           {language === 'java' && (
             <label className="mobile-coding-stdin">
               <span>Input (stdin)</span>
               <textarea
                 value={prompt.codingStdin ?? ''}
-                onChange={(event) => onPromptChange({ codingStdin: event.target.value })}
+                onChange={(event) => onPromptChange({
+                  codingStdin: event.target.value,
+                  codingVerification: undefined,
+                  answerResult: undefined,
+                })}
                 placeholder="Optional input passed to your program"
                 disabled={isRunning}
               />
@@ -733,7 +998,7 @@ export default function CodingInterviewExperience({
           {result?.output && <pre className="mobile-coding-output-text">{result.output}</pre>}
           {result?.status === 'Success' && result.matchesExpected !== undefined && (
             <div className={`mobile-coding-expected-check ${result.matchesExpected ? 'is-match' : 'is-different'}`}>
-              <strong>{result.matchesExpected ? 'Matches expected' : 'Different from expected'}</strong>
+              <strong role="status">{result.matchesExpected ? 'Correct answer' : 'Incorrect answer'}</strong>
               <div><span>Your output</span><code>{result.output.trim() || '(empty)'}</code></div>
               <div><span>Expected</span><code>{expectedOutput?.trim() || '(empty)'}</code></div>
             </div>
@@ -744,14 +1009,18 @@ export default function CodingInterviewExperience({
         </section>
       )}
 
-      <div className="mobile-coding-symbol-bar" role="toolbar" aria-label="Code symbols and run">
+      <div
+        className="mobile-coding-symbol-bar"
+        role="toolbar"
+        aria-label="Code symbols and run"
+        onMouseDown={(event) => event.preventDefault()}
+      >
         <div className="mobile-coding-symbol-scroll">
           {[...SHARED_SYMBOLS, ...LANGUAGE_SYMBOLS[language]].map((symbol) => (
             <button
               key={symbol}
               type="button"
-              onPointerDown={(event) => onToolbarPointerDown(event, () => insertSymbol(symbol))}
-              onClick={(event) => onKeyboardToolbarClick(event, () => insertSymbol(symbol))}
+              onClick={() => insertSymbol(symbol)}
               aria-label={symbol === 'Tab' ? 'Insert four spaces' : `Insert ${symbol}`}
             >
               {symbol}
@@ -761,9 +1030,8 @@ export default function CodingInterviewExperience({
         <button
           className="mobile-coding-run-button"
           type="button"
-          onPointerDown={(event) => onToolbarPointerDown(event, () => void runCode())}
-          onClick={(event) => onKeyboardToolbarClick(event, () => void runCode())}
-          disabled={isRunning || !code.trim() || paused}
+          onClick={() => void runCode()}
+          disabled={isRunning || !code.trim() || editorPaused}
           aria-label={isRunning ? 'Code is running' : 'Run code'}
         >
           {isRunning ? <span className="mobile-coding-spinner" aria-hidden="true" /> : <span aria-hidden="true">▶</span>}
@@ -773,13 +1041,76 @@ export default function CodingInterviewExperience({
           <button
             className="mobile-coding-run-button is-stop"
             type="button"
-            onPointerDown={(event) => onToolbarPointerDown(event, stopRun)}
-            onClick={(event) => onKeyboardToolbarClick(event, stopRun)}
+            onClick={stopRun}
           >
             Stop
           </button>
         )}
       </div>
+
+      {verificationOpen && !answerOpen && verificationDialogPromptId === prompt.id && (
+        <div className="mobile-coding-verification-overlay" role="dialog" aria-modal="true" aria-labelledby={`coding-verification-title-${prompt.id}`}>
+          <section className="mobile-coding-verification-card">
+            {isRunning ? (
+              <>
+                <span className="mobile-coding-verification-spinner" aria-hidden="true" />
+                <p className="mobile-coding-eyebrow">{prompt.timeExpired ? 'Time is up' : 'Answer submitted'}</p>
+                <h2 id={`coding-verification-title-${prompt.id}`}>{verificationRetrying ? 'Checking again…' : 'Checking your program…'}</h2>
+                <p>{verificationRetrying ? 'Your code is running again. Please wait for the result.' : 'Your code is running. This may take a few seconds.'}</p>
+                <div className="mobile-coding-verification-progress" role="progressbar" aria-label="Verifying program" />
+              </>
+            ) : !code.trim() ? (
+              <>
+                <span className="mobile-coding-verification-icon is-unknown" aria-hidden="true">⌛</span>
+                <p className="mobile-coding-eyebrow">{prompt.timeExpired ? 'Time is up' : 'Skipped · no code entered'}</p>
+                <h2 id={`coding-verification-title-${prompt.id}`}>{prompt.timeExpired ? 'Time is up' : 'Question skipped'}</h2>
+                {canRetryWithExtraTime && <button type="button" className="secondary-button mobile-coding-retry-button" onClick={retryWithExtraTime}>Try again (+25% time)</button>}
+                {selectedSolution && <button type="button" className="secondary-button" onClick={openReferenceAnswer}>View answer</button>}
+                <button type="button" className="primary-button" onClick={onNext}>Next question</button>
+              </>
+            ) : result?.matchesExpected !== undefined && result.status === 'Success' ? (
+              <>
+                <span className={`mobile-coding-verification-icon ${result.matchesExpected ? 'is-correct' : 'is-incorrect'}`} aria-hidden="true">{result.matchesExpected ? '✓' : '×'}</span>
+                <p className="mobile-coding-eyebrow">{prompt.timeExpired ? 'Time is up' : 'Answer checked'}</p>
+                <h2 id={`coding-verification-title-${prompt.id}`}>{result.matchesExpected ? 'Correct answer!' : 'Incorrect answer'}</h2>
+                <p>{result.matchesExpected ? 'Your program output matches the expected answer.' : 'Your program output does not match the expected answer.'}</p>
+                <div className="mobile-coding-verification-output">
+                  <div><strong>Your output</strong><code>{result.output.trim() || '(empty)'}</code></div>
+                  <div><strong>Expected output</strong><code>{expectedOutput?.trim() || '(not provided)'}</code></div>
+                </div>
+                <div className="mobile-coding-verification-actions">
+                  <IconAction icon="copy" label="Copy question, code, output, and errors" title="Copy all" onClick={() => void copyText(getRunDetails(), 'Question, code, output, and errors copied.')} />
+                  {selectedSolution && <button type="button" className="secondary-button" onClick={openReferenceAnswer}>View answer</button>}
+                </div>
+                {copyNotice && <p className="mobile-coding-copy-notice" role="status" aria-live="polite">{copyNotice}</p>}
+                {canRetryWithExtraTime && <button type="button" className="secondary-button mobile-coding-retry-button" onClick={retryWithExtraTime}>Try again (+25% time)</button>}
+                <button type="button" className="primary-button" onClick={onNext}>Next question</button>
+              </>
+            ) : (
+              <>
+                <span className="mobile-coding-verification-icon is-unknown" aria-hidden="true">!</span>
+                <p className="mobile-coding-eyebrow">{prompt.timeExpired ? 'Time is up' : 'Answer submitted'}</p>
+                <h2 id={`coding-verification-title-${prompt.id}`}>Could not verify your answer</h2>
+                <p>{result?.message || result?.stderr || 'The program did not produce a verifiable result. Check the run output and try again.'}</p>
+                {result && (
+                  <div className="mobile-coding-verification-actions">
+                    <IconAction icon="copy" label="Copy question, code, output, and errors" title="Copy all" onClick={() => void copyText(getRunDetails(), 'Question, code, output, and errors copied.')} />
+                    {selectedSolution && <button type="button" className="secondary-button" onClick={openReferenceAnswer}>View answer</button>}
+                  </div>
+                )}
+                {copyNotice && <p className="mobile-coding-copy-notice" role="status" aria-live="polite">{copyNotice}</p>}
+                {canRetryWithExtraTime && <button type="button" className="secondary-button mobile-coding-retry-button" onClick={retryWithExtraTime}>Try again (+25% time)</button>}
+                {!prompt.timeExpired && (
+                  <button type="button" className="secondary-button mobile-coding-retry-button" onClick={retryVerification} disabled={isRunning || !code.trim()}>
+                    {verificationRetrying ? <><span className="mobile-coding-spinner" aria-hidden="true" />Checking…</> : 'Check again'}
+                  </button>
+                )}
+                <button type="button" className="primary-button" onClick={onNext}>Next question</button>
+              </>
+            )}
+          </section>
+        </div>
+      )}
 
       {answerOpen && selectedSolution && (
         <div className="mobile-coding-answer-overlay" role="dialog" aria-modal="true" aria-labelledby={`coding-answer-title-${prompt.id}`}>
@@ -821,7 +1152,15 @@ export default function CodingInterviewExperience({
                 </div>
               )}
               <div className="mobile-coding-answer-code">
-                <button type="button" className="mobile-coding-small-button" onClick={() => void copySolution(selectedSolution, setAnswerCopyNotice)}>Copy</button>
+                <button
+                  type="button"
+                  className="mobile-coding-icon-button"
+                  onClick={() => void copySolution(selectedSolution, setAnswerCopyNotice)}
+                  aria-label="Copy reference solution"
+                  title="Copy solution"
+                >
+                  <CodingIcon name="copy" />
+                </button>
                 <pre><code>{selectedSolution.code}</code></pre>
               </div>
               {answerCopyNotice && <p className="mobile-coding-copy-notice" role="status">{answerCopyNotice}</p>}
@@ -840,13 +1179,21 @@ export default function CodingInterviewExperience({
               <button
                 type="button"
                 className="secondary-button mobile-coding-try-solution"
-                onClick={() => onTrySolution(makeRunnableSolution(selectedSolution.code, language))}
+                onClick={tryReferenceSolution}
               >
                 Try this in the editor
               </button>
             </div>
             <footer className="mobile-coding-answer-footer">
-              <button type="button" className="secondary-button" onClick={onHideAnswer}>Hide answer</button>
+              <button
+                type="button"
+                className="mobile-coding-icon-button"
+                onClick={closeReferenceAnswer}
+                aria-label="Close reference answer"
+                title="Close answer"
+              >
+                <CodingIcon name="close" />
+              </button>
               <button type="button" className="primary-button" onClick={onNext}>Next question</button>
             </footer>
           </section>
@@ -986,10 +1333,35 @@ function statusClass(status: CodingRunStatus): string {
 
 async function copySolution(solution: SolutionVariant, setNotice: (notice: string) => void): Promise<void> {
   try {
-    await navigator.clipboard.writeText(solution.code);
+    await copyToClipboard(solution.code);
     setNotice('Solution copied.');
   } catch (error) {
     console.error('Could not copy the coding solution.', error);
     setNotice('Could not copy the solution. Select and copy the code manually.');
   }
+}
+
+async function copyToClipboard(text: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch {
+      // Fall back for mobile browsers that expose clipboard but reject writes outside secure contexts.
+    }
+  }
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.append(textarea);
+  let copied = false;
+  try {
+    textarea.select();
+    copied = document.execCommand('copy');
+  } finally {
+    textarea.remove();
+  }
+  if (!copied) throw new Error('Clipboard copy was not available.');
 }

@@ -6,6 +6,13 @@ export type MobileInterviewQuestionKind = 'short-answer' | 'coding' | 'mcq';
 export type MobileCodingLanguage = 'kotlin' | 'java';
 export type MobileInterviewAnswerResult = 'correct' | 'incorrect';
 
+export interface MobileCodingVerification {
+  status: 'correct' | 'incorrect' | 'unavailable';
+  output: string;
+  message?: string;
+  stderr?: string;
+}
+
 export interface MobileInterviewOption {
   id: string;
   text: string;
@@ -40,6 +47,8 @@ export interface MobileInterviewPrompt {
   codingAnswers?: Partial<Record<MobileCodingLanguage, string>>;
   codingStdin?: string;
   codingProblemCollapsed?: boolean;
+  codingVerification?: MobileCodingVerification;
+  codingRetryUsed?: boolean;
 }
 
 export interface TimedMobileInterviewPrompt extends MobileInterviewPrompt {
@@ -85,6 +94,140 @@ export interface MobileInterviewSchedule {
 export const MOBILE_INTERVIEW_STORAGE_KEY = 'kotlin-interview-trainer-mobile-interview-v1';
 export const MOBILE_INTERVIEW_HISTORY_STORAGE_KEY = 'kotlin-interview-trainer-mobile-interview-history-v1';
 export const MOBILE_INTERVIEW_SCHEDULE_STORAGE_KEY = 'kotlin-interview-trainer-mobile-interview-schedule-v1';
+export const MOBILE_INTERVIEW_QUESTION_STATS_STORAGE_KEY = 'kotlin-interview-trainer-mobile-interview-question-stats-v1';
+
+export interface MobileInterviewQuestionStats {
+  attended: number;
+  correct: number;
+  wrong: number;
+  skipped: number;
+}
+
+interface StoredMobileInterviewQuestionStats {
+  version: 2;
+  questions: Record<string, MobileInterviewQuestionStats>;
+  attendanceEvents: string[];
+  skippedEvents: string[];
+  answerEvents: Record<string, 'correct' | 'incorrect'>;
+}
+
+function readStoredMobileInterviewQuestionStats(
+  storage: Pick<Storage, 'getItem'>,
+): StoredMobileInterviewQuestionStats {
+  const stored = storage.getItem(MOBILE_INTERVIEW_QUESTION_STATS_STORAGE_KEY);
+  if (!stored) return { version: 2, questions: {}, attendanceEvents: [], skippedEvents: [], answerEvents: {} };
+  try {
+    const parsed: unknown = JSON.parse(stored);
+    if (!isRecord(parsed) || parsed.version !== 2 || !isRecord(parsed.questions)) {
+      return { version: 2, questions: {}, attendanceEvents: [], skippedEvents: [], answerEvents: {} };
+    }
+    const questions: Record<string, MobileInterviewQuestionStats> = {};
+    Object.entries(parsed.questions).forEach(([id, value]) => {
+      if (isRecord(value)
+        && typeof value.attended === 'number' && Number.isInteger(value.attended) && value.attended >= 0
+        && typeof value.correct === 'number' && Number.isInteger(value.correct) && value.correct >= 0
+        && typeof value.wrong === 'number' && Number.isInteger(value.wrong) && value.wrong >= 0
+        && typeof value.skipped === 'number' && Number.isInteger(value.skipped) && value.skipped >= 0) {
+        questions[id] = {
+          attended: value.attended,
+          correct: value.correct,
+          wrong: value.wrong,
+          skipped: value.skipped,
+        };
+      }
+    });
+    return {
+      version: 2,
+      questions,
+      attendanceEvents: Array.isArray(parsed.attendanceEvents)
+        ? parsed.attendanceEvents.filter((value): value is string => typeof value === 'string')
+        : [],
+      skippedEvents: Array.isArray(parsed.skippedEvents)
+        ? parsed.skippedEvents.filter((value): value is string => typeof value === 'string')
+        : [],
+      answerEvents: isRecord(parsed.answerEvents)
+        ? Object.fromEntries(Object.entries(parsed.answerEvents).filter(
+            (entry): entry is [string, 'correct' | 'incorrect'] => entry[1] === 'correct' || entry[1] === 'incorrect',
+          ))
+        : {},
+    };
+  } catch {
+    return { version: 2, questions: {}, attendanceEvents: [], skippedEvents: [], answerEvents: {} };
+  }
+}
+
+export function loadMobileInterviewQuestionStats(
+  storage: Pick<Storage, 'getItem'>,
+): Record<string, MobileInterviewQuestionStats> {
+  return readStoredMobileInterviewQuestionStats(storage).questions;
+}
+
+export function recordMobileInterviewQuestionAttendance(
+  storage: Pick<Storage, 'getItem' | 'setItem'>,
+  sessionId: string,
+  promptId: string,
+): Record<string, MobileInterviewQuestionStats> {
+  const stored = readStoredMobileInterviewQuestionStats(storage);
+  const eventId = JSON.stringify([sessionId, promptId]);
+  const alreadyAttended = stored.attendanceEvents.includes(eventId);
+  const skippedIndex = stored.skippedEvents.indexOf(eventId);
+  if (!alreadyAttended || skippedIndex !== -1) {
+    const current = stored.questions[promptId] ?? { attended: 0, correct: 0, wrong: 0, skipped: 0 };
+    stored.questions[promptId] = {
+      ...current,
+      attended: current.attended + (alreadyAttended ? 0 : 1),
+      skipped: current.skipped - (skippedIndex === -1 ? 0 : 1),
+    };
+    if (!alreadyAttended) stored.attendanceEvents.push(eventId);
+    if (skippedIndex !== -1) stored.skippedEvents.splice(skippedIndex, 1);
+    storage.setItem(MOBILE_INTERVIEW_QUESTION_STATS_STORAGE_KEY, JSON.stringify(stored));
+  }
+  return stored.questions;
+}
+
+export function recordMobileInterviewQuestionAnswerResult(
+  storage: Pick<Storage, 'getItem' | 'setItem'>,
+  sessionId: string,
+  promptId: string,
+  result: 'correct' | 'incorrect',
+): Record<string, MobileInterviewQuestionStats> {
+  const stored = readStoredMobileInterviewQuestionStats(storage);
+  const eventId = JSON.stringify([sessionId, promptId]);
+  const previousResult = stored.answerEvents[eventId];
+  if (previousResult !== result) {
+    const current = stored.questions[promptId] ?? { attended: 0, correct: 0, wrong: 0, skipped: 0 };
+    stored.questions[promptId] = {
+      ...current,
+      correct: current.correct + (result === 'correct' ? 1 : 0) - (previousResult === 'correct' ? 1 : 0),
+      wrong: current.wrong + (result === 'incorrect' ? 1 : 0) - (previousResult === 'incorrect' ? 1 : 0),
+    };
+    stored.answerEvents[eventId] = result;
+    storage.setItem(MOBILE_INTERVIEW_QUESTION_STATS_STORAGE_KEY, JSON.stringify(stored));
+  }
+  return stored.questions;
+}
+
+export function recordMobileInterviewQuestionSkipped(
+  storage: Pick<Storage, 'getItem' | 'setItem'>,
+  sessionId: string,
+  promptId: string,
+): Record<string, MobileInterviewQuestionStats> {
+  const stored = readStoredMobileInterviewQuestionStats(storage);
+  const eventId = JSON.stringify([sessionId, promptId]);
+  if (!stored.skippedEvents.includes(eventId)) {
+    const current = stored.questions[promptId] ?? { attended: 0, correct: 0, wrong: 0, skipped: 0 };
+    stored.questions[promptId] = { ...current, skipped: current.skipped + 1 };
+    stored.skippedEvents.push(eventId);
+    storage.setItem(MOBILE_INTERVIEW_QUESTION_STATS_STORAGE_KEY, JSON.stringify(stored));
+  }
+  return stored.questions;
+}
+
+export function clearMobileInterviewQuestionStats(
+  storage: Pick<Storage, 'removeItem'>,
+): void {
+  storage.removeItem(MOBILE_INTERVIEW_QUESTION_STATS_STORAGE_KEY);
+}
 
 export function getMobileInterviewPromptLimit(durationMinutes: number): number {
   if (!Number.isFinite(durationMinutes) || durationMinutes <= 0) return 0;
@@ -120,26 +263,23 @@ export function createMobileInterviewSession(
   const questionDurationSeconds = options.untimed
     ? 0
     : options.questionTimeLimitSeconds ?? Math.ceil(Math.round(durationMinutes * 60) / prompts.length);
-  const codingQuestionDurationSeconds = 300;
-  const sessionPrompts: TimedMobileInterviewPrompt[] = prompts.map((prompt) => ({
-    ...prompt,
-    referenceItems: prompt.referenceItems.map((item) => ({ ...item })),
-    timeLimitSeconds: options.untimed
+  const sessionPrompts: TimedMobileInterviewPrompt[] = prompts.map((prompt) => {
+    const usesProgramTimer = prompt.kind === 'coding' || isProgramInterviewPrompt(prompt);
+    const timeLimitSeconds = options.untimed
       ? 0
-      : prompt.kind === 'coding'
-        ? codingQuestionDurationSeconds
-        : isProgramInterviewPrompt(prompt) && options.programQuestionTimeLimitSeconds !== undefined
-          ? options.programQuestionTimeLimitSeconds
-          : questionDurationSeconds,
-    remainingSeconds: options.untimed
-      ? 0
-      : prompt.kind === 'coding'
-        ? codingQuestionDurationSeconds
-        : isProgramInterviewPrompt(prompt) && options.programQuestionTimeLimitSeconds !== undefined
-          ? options.programQuestionTimeLimitSeconds
-          : questionDurationSeconds,
-    timeExpired: false,
-  }));
+      : usesProgramTimer && options.programQuestionTimeLimitSeconds !== undefined
+        ? options.programQuestionTimeLimitSeconds
+        : prompt.kind === 'coding'
+          ? 300
+          : questionDurationSeconds;
+    return {
+      ...prompt,
+      referenceItems: prompt.referenceItems.map((item) => ({ ...item })),
+      timeLimitSeconds,
+      remainingSeconds: timeLimitSeconds,
+      timeExpired: false,
+    };
+  });
   const durationSeconds = options.untimed
     ? 0
     : options.questionTimeLimitSeconds !== undefined
@@ -167,9 +307,11 @@ export function createMobileInterviewSession(
 }
 
 export function isProgramInterviewPrompt(
-  prompt: Pick<MobileInterviewPrompt, 'checklistTitle' | 'sectionTitle'>,
+  prompt: Pick<MobileInterviewPrompt, 'checklistTitle' | 'sectionTitle'> & Partial<Pick<MobileInterviewPrompt, 'kind'>>,
 ): boolean {
-  return /program/i.test(prompt.checklistTitle) || /program/i.test(prompt.sectionTitle);
+  return prompt.kind === 'coding'
+    || /program/i.test(prompt.checklistTitle)
+    || /program/i.test(prompt.sectionTitle);
 }
 
 export function formatMobileInterviewQaText(
@@ -185,7 +327,16 @@ export function formatMobileInterviewQaText(
       ...(prompt.explanation ? [`Explanation: ${prompt.explanation}`] : []),
     ].join('\n') || 'No reference answer is available.';
     const selectedOption = prompt.options?.find((option) => option.id === prompt.selectedOptionId)?.text;
-    const userAnswer = prompt.answerText?.trim() || selectedOption || prompt.note.trim() || 'No answer submitted.';
+    const codingAnswers = (['kotlin', 'java'] as const).flatMap((language) => {
+      const code = prompt.codingAnswers?.[language]?.trim();
+      return code ? [`${language === 'kotlin' ? 'Kotlin' : 'Java'} code:\n${code}`] : [];
+    });
+    const userAnswer = [
+      prompt.answerText?.trim(),
+      selectedOption,
+      prompt.note.trim(),
+      ...codingAnswers,
+    ].filter((answer): answer is string => Boolean(answer)).join('\n\n') || 'No answer submitted.';
     return [
       `Question ${index + 1}${prompt.sectionTitle ? ` — ${prompt.sectionTitle}` : ''}`,
       prompt.text,
@@ -229,6 +380,36 @@ export function resumeMobileInterviewSession(session: MobileInterviewSession, no
   return { ...session, status: 'running', endsAt: now + session.remainingSeconds * 1000 };
 }
 
+export function retryCodingInterviewPromptWithExtraTime(
+  session: MobileInterviewSession,
+  now = Date.now(),
+): MobileInterviewSession {
+  if (session.status !== 'paused' || session.untimed) return session;
+  const prompt = session.prompts[session.activeIndex];
+  if (prompt.kind !== 'coding' || !prompt.timeExpired || prompt.codingRetryUsed) return session;
+
+  const extraSeconds = Math.max(1, Math.ceil(prompt.timeLimitSeconds / 4));
+  const prompts = session.prompts.map((item, index) => index === session.activeIndex
+    ? {
+        ...item,
+        answered: false,
+        answerResult: undefined,
+        codingVerification: undefined,
+        codingRetryUsed: true,
+        remainingSeconds: extraSeconds,
+        timeExpired: false,
+      }
+    : item);
+  return {
+    ...session,
+    prompts,
+    durationSeconds: session.durationSeconds + extraSeconds,
+    remainingSeconds: extraSeconds,
+    endsAt: now + extraSeconds * 1000,
+    status: 'running',
+  };
+}
+
 export function moveMobileInterviewToPrompt(
   session: MobileInterviewSession,
   index: number,
@@ -245,7 +426,7 @@ export function moveMobileInterviewToPrompt(
   const prompts = session.prompts.map((prompt, promptIndex) => promptIndex === session.activeIndex
     ? { ...prompt, remainingSeconds }
     : prompt);
-  if (remainingSeconds === 0) {
+  if (remainingSeconds === 0 && !session.prompts[session.activeIndex].timeExpired) {
     return expireMobileInterviewPrompt({ ...session, prompts, remainingSeconds, endsAt: null }, now);
   }
   if (index >= prompts.length) {
@@ -270,8 +451,23 @@ export function moveMobileInterviewToPrompt(
 export function expireMobileInterviewPrompt(session: MobileInterviewSession, now = Date.now()): MobileInterviewSession {
   if (session.status !== 'running' || session.untimed) return session;
   const prompts = session.prompts.map((prompt, index) => index === session.activeIndex
-    ? { ...prompt, remainingSeconds: 0, timeExpired: true }
+    ? {
+        ...prompt,
+        ...(prompt.kind === 'coding' ? { answered: true } : {}),
+        remainingSeconds: 0,
+        timeExpired: true,
+      }
     : prompt);
+  const activePrompt = prompts[session.activeIndex];
+  if (activePrompt.kind === 'coding') {
+    return {
+      ...session,
+      prompts,
+      status: 'paused',
+      remainingSeconds: 0,
+      endsAt: null,
+    };
+  }
   const nextIndex = session.activeIndex + 1;
   if (nextIndex >= prompts.length) {
     return {
@@ -599,6 +795,8 @@ function parsePrompt(
       ))))
     || (value.codingStdin !== undefined && typeof value.codingStdin !== 'string')
     || (value.codingProblemCollapsed !== undefined && typeof value.codingProblemCollapsed !== 'boolean')
+    || (value.codingRetryUsed !== undefined && typeof value.codingRetryUsed !== 'boolean')
+    || (value.codingVerification !== undefined && !isMobileCodingVerification(value.codingVerification))
     || (kind === 'mcq' && (!options || options.length < 2 || typeof value.correctOptionId !== 'string'))) return undefined;
   if (kind === 'mcq' && options) {
     const optionIds = options.map((option) => option.id);
@@ -655,6 +853,8 @@ function parsePrompt(
     } : {}),
     ...(typeof value.codingStdin === 'string' ? { codingStdin: value.codingStdin } : {}),
     ...(typeof value.codingProblemCollapsed === 'boolean' ? { codingProblemCollapsed: value.codingProblemCollapsed } : {}),
+    ...(typeof value.codingRetryUsed === 'boolean' ? { codingRetryUsed: value.codingRetryUsed } : {}),
+    ...(isMobileCodingVerification(value.codingVerification) ? { codingVerification: { ...value.codingVerification } } : {}),
     timeLimitSeconds,
     remainingSeconds,
     timeExpired,
@@ -663,6 +863,14 @@ function parsePrompt(
 
 function isMobileInterviewOption(value: unknown): value is MobileInterviewOption {
   return isRecord(value) && typeof value.id === 'string' && typeof value.text === 'string';
+}
+
+function isMobileCodingVerification(value: unknown): value is MobileCodingVerification {
+  return isRecord(value)
+    && (value.status === 'correct' || value.status === 'incorrect' || value.status === 'unavailable')
+    && typeof value.output === 'string'
+    && (value.message === undefined || typeof value.message === 'string')
+    && (value.stderr === undefined || typeof value.stderr === 'string');
 }
 
 function isMobileInterviewPrompt(value: TimedMobileInterviewPrompt | undefined): value is TimedMobileInterviewPrompt {

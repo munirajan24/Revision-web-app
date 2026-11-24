@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   createMobileInterviewSession,
+  clearMobileInterviewQuestionStats,
   expireMobileInterviewPrompt,
   finishMobileInterviewSession,
   formatMobileInterviewQaText,
@@ -8,9 +9,11 @@ import {
   getMobileInterviewRemainingSeconds,
   isProgramInterviewPrompt,
   loadMobileInterviewHistory,
+  loadMobileInterviewQuestionStats,
   loadMobileInterviewSchedules,
   loadMobileInterviewSession,
   MOBILE_INTERVIEW_HISTORY_STORAGE_KEY,
+  MOBILE_INTERVIEW_QUESTION_STATS_STORAGE_KEY,
   MOBILE_INTERVIEW_SCHEDULE_STORAGE_KEY,
   MOBILE_INTERVIEW_STORAGE_KEY,
   mergeMobileInterviewBackups,
@@ -19,7 +22,11 @@ import {
   parseMobileInterviewSession,
   parseMobileInterviewSchedule,
   pauseMobileInterviewSession,
+  recordMobileInterviewQuestionAnswerResult,
+  recordMobileInterviewQuestionAttendance,
+  recordMobileInterviewQuestionSkipped,
   resumeMobileInterviewSession,
+  retryCodingInterviewPromptWithExtraTime,
   saveMobileInterviewHistory,
   saveMobileInterviewSchedules,
   saveMobileInterviewSession,
@@ -66,6 +73,88 @@ const schedule: MobileInterviewSchedule = {
   createdAt: 1_000,
 };
 
+describe('mobile interview question statistics', () => {
+  it('counts question attendance once per question in an interview session', () => {
+    const storage = memoryStorage();
+
+    recordMobileInterviewQuestionAttendance(storage, 'session-1', 'question-1');
+    recordMobileInterviewQuestionAttendance(storage, 'session-1', 'question-1');
+    recordMobileInterviewQuestionAttendance(storage, 'session-2', 'question-1');
+
+    expect(loadMobileInterviewQuestionStats(storage)).toEqual({
+      'question-1': { attended: 2, correct: 0, wrong: 0, skipped: 0 },
+    });
+  });
+
+  it('tracks correct and wrong answers once per question and updates a changed self-assessment', () => {
+    const storage = memoryStorage();
+
+    recordMobileInterviewQuestionAnswerResult(storage, 'session-1', 'question-1', 'incorrect');
+    recordMobileInterviewQuestionAnswerResult(storage, 'session-1', 'question-1', 'incorrect');
+    recordMobileInterviewQuestionAnswerResult(storage, 'session-2', 'question-1', 'correct');
+
+    expect(loadMobileInterviewQuestionStats(storage)).toEqual({
+      'question-1': { attended: 0, correct: 1, wrong: 1, skipped: 0 },
+    });
+
+    recordMobileInterviewQuestionAnswerResult(storage, 'session-1', 'question-1', 'correct');
+
+    expect(loadMobileInterviewQuestionStats(storage)).toEqual({
+      'question-1': { attended: 0, correct: 2, wrong: 0, skipped: 0 },
+    });
+  });
+
+  it('counts skipped questions once per interview', () => {
+    const storage = memoryStorage();
+
+    recordMobileInterviewQuestionSkipped(storage, 'session-1', 'question-1');
+    recordMobileInterviewQuestionSkipped(storage, 'session-1', 'question-1');
+    recordMobileInterviewQuestionSkipped(storage, 'session-2', 'question-1');
+
+    expect(loadMobileInterviewQuestionStats(storage)).toEqual({
+      'question-1': { attended: 0, correct: 0, wrong: 0, skipped: 2 },
+    });
+
+    recordMobileInterviewQuestionAttendance(storage, 'session-1', 'question-1');
+
+    expect(loadMobileInterviewQuestionStats(storage)).toEqual({
+      'question-1': { attended: 1, correct: 0, wrong: 0, skipped: 1 },
+    });
+  });
+
+  it('counts an empty coding submission as skipped, not attended', () => {
+    const storage = memoryStorage();
+
+    recordMobileInterviewQuestionSkipped(storage, 'session-1', 'coding-question');
+
+    expect(loadMobileInterviewQuestionStats(storage)).toEqual({
+      'coding-question': { attended: 0, correct: 0, wrong: 0, skipped: 1 },
+    });
+  });
+
+  it('clears saved statistics', () => {
+    const storage = memoryStorage();
+    recordMobileInterviewQuestionAttendance(storage, 'session-1', 'question-1');
+
+    clearMobileInterviewQuestionStats(storage);
+
+    expect(storage.getItem(MOBILE_INTERVIEW_QUESTION_STATS_STORAGE_KEY)).toBeNull();
+    expect(loadMobileInterviewQuestionStats(storage)).toEqual({});
+  });
+
+  it('discards the previous open-question counts that were recorded merely by viewing questions', () => {
+    const storage = memoryStorage();
+    storage.setItem(MOBILE_INTERVIEW_QUESTION_STATS_STORAGE_KEY, JSON.stringify({
+      version: 1,
+      questions: { 'question-1': { attended: 1, correct: 0 } },
+      attendanceEvents: ['["session-1","question-1"]'],
+      correctEvents: [],
+    }));
+
+    expect(loadMobileInterviewQuestionStats(storage)).toEqual({});
+  });
+});
+
 describe('mobile interview sessions', () => {
   it('scales the question round to the selected time limit', () => {
     expect([15, 30, 45].map(getMobileInterviewPromptLimit)).toEqual([10, 20, 30]);
@@ -107,15 +196,16 @@ describe('mobile interview sessions', () => {
       prompt('regular'),
       { ...prompt('program-bank'), checklistTitle: 'Programming Questions' },
       { ...prompt('program-section'), sectionTitle: 'Program Exercises' },
+      { ...prompt('generated-coding'), checklistTitle: 'Kotlin Coding', sectionTitle: 'Kotlin Coding', kind: 'coding' as const },
     ];
     const session = createMobileInterviewSession(prompts, 'kotlin', 0, 1_000, {
       questionTimeLimitSeconds: 120,
       programQuestionTimeLimitSeconds: 900,
     });
 
-    expect(prompts.map(isProgramInterviewPrompt)).toEqual([false, true, true]);
-    expect(session.durationSeconds).toBe(1_920);
-    expect(session.prompts.map((item) => item.timeLimitSeconds)).toEqual([120, 900, 900]);
+    expect(prompts.map(isProgramInterviewPrompt)).toEqual([false, true, true, true]);
+    expect(session.durationSeconds).toBe(2_820);
+    expect(session.prompts.map((item) => item.timeLimitSeconds)).toEqual([120, 900, 900, 900]);
     expect(moveMobileInterviewToPrompt(session, 1, 2_000)).toMatchObject({
       activeIndex: 1,
       questionDurationSeconds: 120,
@@ -124,7 +214,7 @@ describe('mobile interview sessions', () => {
     });
   });
 
-  it('gives coding questions a five-minute timer and preserves editor memory in saved sessions', () => {
+  it('uses the selected program timer for coding questions and preserves editor memory in saved sessions', () => {
     const codingPrompt = {
       ...prompt('coding'),
       kind: 'coding' as const,
@@ -132,20 +222,44 @@ describe('mobile interview sessions', () => {
       codingLanguage: 'java' as const,
       codingAnswers: { kotlin: 'fun main() {}', java: 'class Main {}' },
       codingStdin: 'sample input',
+      codingVerification: { status: 'correct' as const, output: '42' },
     };
     const session = createMobileInterviewSession([codingPrompt], 'mixed', 0, 1_000, {
       questionTimeLimitSeconds: 60,
+      programQuestionTimeLimitSeconds: 900,
     });
     const restored = parseMobileInterviewSession(session);
 
-    expect(session.prompts[0].timeLimitSeconds).toBe(300);
-    expect(session.durationSeconds).toBe(300);
+    expect(session.prompts[0].timeLimitSeconds).toBe(900);
+    expect(session.durationSeconds).toBe(900);
     expect(restored?.prompts[0]).toMatchObject({
       codingProblemId: 7,
       codingLanguage: 'java',
       codingAnswers: { kotlin: 'fun main() {}', java: 'class Main {}' },
       codingStdin: 'sample input',
+      codingVerification: { status: 'correct', output: '42' },
     });
+
+  });
+
+  it('applies the selected program duration to coding questions and leaves regular questions unchanged', () => {
+    const prompts = [
+      prompt('regular'),
+      {
+        ...prompt('coding'),
+        kind: 'coding' as const,
+        codingProblemId: 7,
+        codingLanguage: 'kotlin' as const,
+      },
+    ];
+    const session = createMobileInterviewSession(prompts, 'mixed', 0, 1_000, {
+      questionTimeLimitSeconds: 120,
+      programQuestionTimeLimitSeconds: 600,
+    });
+
+    expect(session.prompts.map((item) => item.timeLimitSeconds)).toEqual([120, 600]);
+    expect(session.durationSeconds).toBe(720);
+    expect(session.remainingSeconds).toBe(120);
   });
 
   it('formats the full interview with reference and submitted answers for text export', () => {
@@ -159,6 +273,13 @@ describe('mobile interview sessions', () => {
         correctOptionId: 'b',
         selectedOptionId: 'a',
       },
+      {
+        ...prompt('three'),
+        text: 'Write a Kotlin program.',
+        kind: 'coding' as const,
+        referenceAnswer: 'fun main() { println("hello") }',
+        codingAnswers: { kotlin: 'fun main() { println("hello") }', java: 'class Main { }' },
+      },
     ];
     const session = createMobileInterviewSession(prompts, 'kotlin', 15, 1_000, { questionTimeLimitSeconds: 60 });
     const text = formatMobileInterviewQaText({ ...session, title: 'Kotlin Review' });
@@ -166,6 +287,7 @@ describe('mobile interview sessions', () => {
     expect(text).toContain('Kotlin Review — Questions & Answers');
     expect(text).toContain('Question 1 — Null safety\nWhat is null safety?\n\nReference answer:\nExample answer\n\nYour answer:\nAvoid null pointer exceptions.');
     expect(text).toContain('Question 2 — Null safety\nChoose the correct option.\n\nReference answer:\nCorrect option: Option B\nExample answer\n\nYour answer:\nOption A');
+    expect(text).toContain('Question 3 — Null safety\nWrite a Kotlin program.\n\nReference answer:\nfun main() { println("hello") }\n\nYour answer:\nKotlin code:\nfun main() { println("hello") }\n\nJava code:\nclass Main { }');
     expect(text).toContain('----------------------------------------');
   });
 
@@ -219,6 +341,80 @@ describe('mobile interview sessions', () => {
     expect(secondQuestion).toMatchObject({ activeIndex: 1, status: 'running', remainingSeconds: 450, endsAt: 901_000 });
     expect(secondQuestion.prompts[0]).toMatchObject({ timeExpired: true, remainingSeconds: 0 });
     expect(secondQuestion.prompts[1]).toMatchObject({ timeExpired: false, remainingSeconds: 450 });
+  });
+
+  it('keeps an expired coding question active and paused for answer verification', () => {
+    const codingPrompt = {
+      ...prompt('coding'),
+      kind: 'coding' as const,
+      codingProblemId: 7,
+      codingLanguage: 'java' as const,
+    };
+    const session = createMobileInterviewSession([codingPrompt, prompt('next')], 'kotlin', 15, 1_000);
+    const expired = expireMobileInterviewPrompt(session, 301_000);
+
+    expect(expired).toMatchObject({
+      activeIndex: 0,
+      status: 'paused',
+      remainingSeconds: 0,
+      endsAt: null,
+    });
+    expect(expired.prompts[0]).toMatchObject({ answered: true, timeExpired: true, remainingSeconds: 0 });
+    expect(expired.prompts[1]).toMatchObject({ answered: false, timeExpired: false });
+  });
+
+  it('grants one coding retry with one quarter of the original time limit', () => {
+    const codingPrompt = {
+      ...prompt('coding'),
+      kind: 'coding' as const,
+      codingProblemId: 7,
+      codingVerification: { status: 'incorrect' as const, output: 'wrong' },
+      answerResult: 'incorrect' as const,
+    };
+    const started = createMobileInterviewSession([codingPrompt, prompt('next')], 'kotlin', 0, 1_000, {
+      questionTimeLimitSeconds: 300,
+    });
+    const expired = expireMobileInterviewPrompt(started, 301_000);
+    const retried = retryCodingInterviewPromptWithExtraTime(expired, 302_000);
+
+    expect(retried).toMatchObject({
+      status: 'running',
+      remainingSeconds: 75,
+      endsAt: 377_000,
+      durationSeconds: 675,
+    });
+    expect(retried.prompts[0]).toMatchObject({
+      timeLimitSeconds: 300,
+      remainingSeconds: 75,
+      timeExpired: false,
+      answered: false,
+      codingRetryUsed: true,
+    });
+    expect(retried.prompts[0].codingVerification).toBeUndefined();
+    expect(retried.prompts[0].answerResult).toBeUndefined();
+    expect(parseMobileInterviewSession(retried)?.prompts[0].codingRetryUsed).toBe(true);
+
+    const expiredAgain = expireMobileInterviewPrompt(retried, 377_000);
+    expect(retryCodingInterviewPromptWithExtraTime(expiredAgain, 378_000)).toBe(expiredAgain);
+  });
+
+  it('advances from a paused expired coding question instead of expiring it again', () => {
+    const codingPrompt = {
+      ...prompt('coding'),
+      kind: 'coding' as const,
+      codingProblemId: 7,
+      codingLanguage: 'java' as const,
+    };
+    const session = createMobileInterviewSession([codingPrompt, prompt('next')], 'kotlin', 15, 1_000);
+    const expired = expireMobileInterviewPrompt(session, 301_000);
+    const next = moveMobileInterviewToPrompt(expired, 1, 302_000);
+
+    expect(next).toMatchObject({ activeIndex: 1, status: 'paused', remainingSeconds: 450 });
+    expect(resumeMobileInterviewSession(next, 303_000)).toMatchObject({
+      activeIndex: 1,
+      status: 'running',
+      endsAt: 753_000,
+    });
   });
 
   it('keeps in-progress answer drafts when a question times out', () => {

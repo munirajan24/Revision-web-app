@@ -27,7 +27,7 @@ Coding interviews are separate from the concept-question flow. The question-bank
 
 - Present all questions from the selected sections, grouped in their original section and question order unless randomization is explicitly enabled.
 - One focused prompt per screen with the current section, question position, round progress, and a distinct per-question countdown.
-- Coding prompts use a five-minute timer and a language-specific editor, symbol toolbar, output drawer, and reference-answer sheet. Kotlin executes through Kotlin Playground; Java executes through Judge0 CE.
+- Coding prompts use a five-minute timer and a language-specific editor, symbol toolbar, output drawer, and reference-answer sheet. Kotlin executes through Kotlin Playground; Java executes through Judge0 CE. Running code compares its output with the expected output and records correct/incorrect results. Submitting or timing out pauses on the coding prompt, verifies the saved code with visible progress, and shows the result before continuing; the result screen links to the reference-answer sheet without resuming the timer. The editor uses a compact mobile height, with accessible icon controls for copy and collapsing question details.
 - Preserve Kotlin and Java editor contents independently for each coding prompt.
 - Pause, resume, skip, mark important, save response drafts automatically, and end early with confirmation.
 - Support saved short-form responses. Submit to show a saved-response confirmation. The user explicitly advances after reviewing; viewing the reference answer also requires explicit Next.
@@ -39,7 +39,7 @@ Coding interviews are separate from the concept-question flow. The question-bank
 - Validate imported and persisted schedules, question state, and session state.
 - Preserve legacy active sessions and history; adding this feature must not clear existing browser data.
 - Include Mobile Interview sessions, history, and calendar entries in Settings backup/import.
-- Persist coding language, per-language editor contents, and Java standard input with the active prompt.
+- Persist coding language, per-language editor contents, Java standard input, and completed verification results with the active prompt.
 - Support older app backup formats; backups created before the calendar existed import with an empty Mobile Interview schedule.
 
 ## Validation and acceptance
@@ -47,6 +47,6 @@ Coding interviews are separate from the concept-question flow. The question-bank
 - Mobile Interview reuses the same source questions and answers as Complete Revision; its progress and session records remain independent.
 - Kotlin Coding and Java Coding each contain the 120 roadmap problems, and their editor, runner, and answer sheet remain isolated from concept questions.
 - Users can select multiple sets/sections, randomize questions, schedule independent sessions, and view their own calendar/history.
-- Each question has its own configurable timer; a timeout preserves the current answer draft. Questions follow original section order by default, random order is opt-in, and answer feedback/reveal waits for explicit navigation.
+- Each question has its own configurable timer; a timeout preserves the current answer draft. Coding timeouts stay on the coding prompt for execution and verification before continuing. A completed coding verification survives refresh without reopening a stale result dialog, and Continue advances from an expired prompt. Questions follow original section order by default, random order is opt-in, and answer feedback/reveal waits for explicit navigation.
 - Schedule and session records survive refresh and backup/restore without modifying Revision Checklist progress.
 - The page remains usable on a phone-sized viewport and in a desktop browser.

@@ -764,6 +764,13 @@ export default function App() {
           >
             Dashboard
           </button>
+          <button
+            type="button"
+            className={view === 'mobile-interview' ? 'nav-item active' : 'nav-item'}
+            onClick={() => navigateToView('mobile-interview')}
+          >
+            Mobile interview
+          </button>
           {[
             {
               id: 'coding',
@@ -784,7 +791,6 @@ export default function App() {
                 ['android-concepts', 'Android concepts'],
                 ['android-quick-review', 'Android quick review'],
                 ['sample-interview', 'Sample interview'],
-                ['mobile-interview', 'Mobile interview'],
               ],
             },
             {

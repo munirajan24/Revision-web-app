@@ -2,25 +2,25 @@
   "kotlin": [
     {
       "label": "Basic Solution",
-      "code": "fun findMissingNumberFrom1ToN(input: List<Int>): List<Int> {\n    return input.filter { it > 0 }.sorted()\n}",
+      "code": "fun findMissingNumberFrom1ToN(input: List<Int>): Int {\n    val n = input.size.toLong() + 1\n    var actualSum = 0L\n    for (value in input) actualSum += value\n    val expectedSum = n * (n + 1) / 2\n    return (expectedSum - actualSum).toInt()\n}",
       "recommendation": "Best",
       "note": "Best: this is the cleanest and most direct version, and it is usually the strongest first answer in an interview."
     },
     {
       "label": "Alternative",
-      "code": "fun findMissingNumberFrom1ToN(input: List<Int>): List<Int> {\n    val result = mutableListOf<Int>()\n    for (value in input) {\n        if (value > 0) result.add(value)\n    }\n    result.sort()\n    return result\n\n}",
+      "code": "fun findMissingNumberFrom1ToN(input: List<Int>): Int {\n    val n = input.size + 1\n    val present = input.toHashSet()\n    for (candidate in 1..n) {\n        if (candidate !in present) return candidate\n    }\n    return -1\n}",
       "recommendation": "Good to try",
       "note": "Good to try: this is a valid backup and easy to explain, but the simplest direct solution usually reads better in an interview."
     },
     {
       "label": "Loop",
-      "code": "fun findMissingNumberFrom1ToN(input: List<Int>): List<Int> {\n    val result = mutableListOf<Int>()\n    for (value in input) {\n        if (value > 0) result.add(value)\n    }\n    result.sort()\n    return result\n\n}",
+      "code": "fun findMissingNumberFrom1ToN(input: List<Int>): Int {\n    val n = input.size + 1\n    var missing = 0\n    for (candidate in 1..n) missing = missing xor candidate\n    for (value in input) missing = missing xor value\n    return missing\n}",
       "recommendation": "Good to try",
       "note": "Good to try: the explicit loop is easy to reason about, which makes it a strong backup when the interviewer wants to see every step."
     },
     {
       "label": "Stream API",
-      "code": "fun findMissingNumberFrom1ToN(input: List<Int>): List<Int> {\n    return input.asSequence().filter { it > 0 }.sorted().toList()\n}",
+      "code": "fun findMissingNumberFrom1ToN(input: List<Int>): Int {\n    val n = input.size.toLong() + 1\n    return (n * (n + 1) / 2 - input.fold(0L) { total, value -> total + value }).toInt()\n}",
       "recommendation": "Good to try",
       "note": "Good to try: this is concise and elegant, but it is usually a second-choice answer unless the problem is clearly built for a collection pipeline."
     }
@@ -28,25 +28,25 @@
   "java": [
     {
       "label": "Basic Solution",
-      "code": "public static List<Integer> findMissingNumberFrom1ToN(List<Integer> input) {\n    return input.stream().filter(value -> value > 0).sorted().toList();\n}",
+      "code": "public static int findMissingNumberFrom1ToN(List<Integer> input) {\n    long n = input.size() + 1L;\n    long actualSum = 0;\n    for (int value : input) actualSum += value;\n    long expectedSum = n * (n + 1) / 2;\n    return (int) (expectedSum - actualSum);\n}",
       "recommendation": "Good to try",
       "note": "Good to try: this is readable and compact, but the stream chain is usually less explicit than the cleaner loop-based explanation when the interviewer wants exact control."
     },
     {
       "label": "Alternative",
-      "code": "public static List<Integer> findMissingNumberFrom1ToN(List<Integer> input) {\n    List<Integer> result = new ArrayList<>();\n    for (int value : input) {\n        if (value > 0) result.add(value);\n    }\n    Collections.sort(result);\n    return result;\n\n}",
+      "code": "public static int findMissingNumberFrom1ToN(List<Integer> input) {\n    int n = input.size() + 1;\n    Set<Integer> present = new HashSet<>(input);\n    for (int candidate = 1; candidate <= n; candidate++) {\n        if (!present.contains(candidate)) return candidate;\n    }\n    return -1;\n}",
       "recommendation": "Good to try",
       "note": "Good to try: this is a valid backup and easy to explain, but the simplest direct solution usually reads better in an interview."
     },
     {
       "label": "Loop",
-      "code": "public static List<Integer> findMissingNumberFrom1ToN(List<Integer> input) {\n    List<Integer> result = new ArrayList<>();\n    for (int value : input) {\n        if (value > 0) result.add(value);\n    }\n    Collections.sort(result);\n    return result;\n\n}",
+      "code": "public static int findMissingNumberFrom1ToN(List<Integer> input) {\n    int n = input.size() + 1;\n    int missing = 0;\n    for (int candidate = 1; candidate <= n; candidate++) missing ^= candidate;\n    for (int value : input) missing ^= value;\n    return missing;\n}",
       "recommendation": "Good to try",
       "note": "Good to try: the explicit loop is easy to reason about, which makes it a strong backup when the interviewer wants to see every step."
     },
     {
       "label": "Stream API",
-      "code": "public static List<Integer> findMissingNumberFrom1ToN(List<Integer> input) {\n    return input.stream().filter(value -> value > 0).sorted().collect(Collectors.toList());\n}",
+      "code": "public static int findMissingNumberFrom1ToN(List<Integer> input) {\n    long n = input.size() + 1L;\n    long actualSum = input.stream().mapToLong(Integer::longValue).sum();\n    return (int) (n * (n + 1) / 2 - actualSum);\n}",
       "recommendation": "Good to try",
       "note": "Good to try: this is concise and elegant, but it is usually a second-choice answer unless the problem is clearly built for a collection pipeline."
     }

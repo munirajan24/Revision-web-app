@@ -285,6 +285,10 @@ const toMethodName = (value: string): string => {
 const getProblemContract = (problem: Pick<Problem, 'title' | 'topic' | 'description'>): ProblemContract => {
   const title = problem.title.toLowerCase();
 
+  if (title.includes('missing number')) {
+    return { family: 'numeric-list', input: 'List<Int>', output: 'Int' };
+  }
+
   if (title.includes('check if') || title.includes('check whether') || title.includes('valid ') || title.includes('is palindrome') || title.includes('anagram')) {
     const input = title.includes('array') || title.includes('numbers') || title.includes('elements') ? 'List<Int>' : 'String';
     return { family: 'boolean', input, output: 'Boolean' };
@@ -1191,6 +1195,37 @@ const buildKotlinVariantSet = (problem: Problem): SolutionVariant[] => {
     );
   }
 
+  if (title.includes('missing number')) {
+    return buildVariants(
+      `fun ${methodName}(input: List<Int>): Int {
+        val n = input.size.toLong() + 1
+        var actualSum = 0L
+        for (value in input) actualSum += value
+        val expectedSum = n * (n + 1) / 2
+        return (expectedSum - actualSum).toInt()
+    }`,
+      `fun ${methodName}(input: List<Int>): Int {
+        val n = input.size + 1
+        val present = input.toHashSet()
+        for (candidate in 1..n) {
+            if (candidate !in present) return candidate
+        }
+        return -1
+    }`,
+      `fun ${methodName}(input: List<Int>): Int {
+        val n = input.size + 1
+        var missing = 0
+        for (candidate in 1..n) missing = missing xor candidate
+        for (value in input) missing = missing xor value
+        return missing
+    }`,
+      `fun ${methodName}(input: List<Int>): Int {
+        val n = input.size.toLong() + 1
+        return (n * (n + 1) / 2 - input.fold(0L) { total, value -> total + value }).toInt()
+    }`
+    );
+  }
+
   return buildVariants(
     `fun ${methodName}(input: List<Int>): List<Int> {
     return input.filter { it > 0 }.sorted()
@@ -1718,6 +1753,38 @@ const buildJavaVariantSet = (problem: Problem): SolutionVariant[] => {
     );
   }
 
+  if (title.includes('missing number')) {
+    return buildVariants(
+      `public static int ${methodName}(List<Integer> input) {
+        long n = input.size() + 1L;
+        long actualSum = 0;
+        for (int value : input) actualSum += value;
+        long expectedSum = n * (n + 1) / 2;
+        return (int) (expectedSum - actualSum);
+    }`,
+      `public static int ${methodName}(List<Integer> input) {
+        int n = input.size() + 1;
+        Set<Integer> present = new HashSet<>(input);
+        for (int candidate = 1; candidate <= n; candidate++) {
+            if (!present.contains(candidate)) return candidate;
+        }
+        return -1;
+    }`,
+      `public static int ${methodName}(List<Integer> input) {
+        int n = input.size() + 1;
+        int missing = 0;
+        for (int candidate = 1; candidate <= n; candidate++) missing ^= candidate;
+        for (int value : input) missing ^= value;
+        return missing;
+    }`,
+      `public static int ${methodName}(List<Integer> input) {
+        long n = input.size() + 1L;
+        long actualSum = input.stream().mapToLong(Integer::longValue).sum();
+        return (int) (n * (n + 1) / 2 - actualSum);
+    }`
+    );
+  }
+
   return buildVariants(
     `public static List<Integer> ${methodName}(List<Integer> input) {
     return input.stream().filter(value -> value > 0).sorted().toList();
@@ -1892,6 +1959,13 @@ export function getProblemExamples(problem: Problem): Example[] {
   if (title.includes('find numbers occurring more than once')) return [{ input: '[1, 2, 2, 3, 3, 3]', output: '[2, 3]' }];
   if (title.includes('most frequent character')) return [{ input: '"banana"', output: '"a"' }];
   if (title.includes('most frequent number')) return [{ input: '[1, 2, 2, 3, 2, 1]', output: '2' }];
+  if (title === 'find character with maximum frequency') return [{ input: '"banana"', output: '"a"' }];
+  if (title === 'count character frequency') return [{ input: '"banana"', output: '{b=1, a=3, n=2}' }];
+  if (title === 'reverse an array') return [{ input: '[1, 2, 3, 4]', output: '[4, 3, 2, 1]' }];
+  if (title === 'find duplicate numbers') return [{ input: '[1, 2, 2, 3]', output: '[2]' }];
+  if (title === 'find missing character') return [{ input: 'expected = "abcde", actual = "abce"', output: 'd' }];
+  if (title === 'sort words by frequency') return [{ input: '"cat dog cat bird dog cat"', output: '["cat", "dog", "bird"]' }];
+  if (title === 'group words by sorted characters') return [{ input: '["eat", "tea", "tan"]', output: '{aet=[eat, tea], ant=[tan]}' }];
   if (title.includes('group words by first character')) return [{ input: '["alice", "adam", "bob"]', output: '{a=[alice, adam], b=[bob]}' }];
   if (title.includes('group numbers by even/odd')) return [{ input: '[1, 2, 3, 4, 5]', output: '{even=[2, 4], odd=[1, 3, 5]}' }];
   if (title.includes('sort strings by length')) return [{ input: '["cat", "elephant", "dog"]', output: '["cat", "dog", "elephant"]' }];
@@ -1927,7 +2001,7 @@ export function getProblemExamples(problem: Problem): Example[] {
   if (title.includes('group') && title.includes('length')) return [{ input: '["a", "bb", "cat"]', output: '{1=[a], 2=[bb], 3=[cat]}' }];
   if (title.includes('group employees')) return [{ input: '[Alice:IT, Bob:HR, Eve:IT]', output: '{IT=[Alice, Eve], HR=[Bob]}' }];
   if (title.includes('unique')) {
-    if (title.includes('character')) return [{ input: '"banana"', output: '[b, n]' }];
+    if (title.includes('character')) return [{ input: '"banana"', output: '[b, a, n]' }];
     if (title.includes('word')) return [{ input: '"red blue red green"', output: '[red, blue, green]' }];
   }
   if (title.includes('convert names')) return [{ input: '["Ana", "Bob"]', output: '[3, 3]' }];
@@ -1955,20 +2029,19 @@ export function getProblemExamples(problem: Problem): Example[] {
   if (title.includes('sort numbers descending')) return [{ input: '[5, 1, 4, 2]', output: '[5, 4, 2, 1]' }];
   if (title.includes('sort numbers by absolute')) return [{ input: '[-5, 2, -1, 4]', output: '[-1, 2, 4, -5]' }];
   if (title.includes('sort characters')) return [{ input: '"dcba"', output: '"abcd"' }];
-  if (title.includes('sort words by frequency')) return [{ input: '"cat dog cat bird dog cat"', output: '["cat", "dog", "bird"]' }];
   if (title.includes('sort numbers')) return [{ input: '[5, 1, 4, 2]', output: '[1, 2, 4, 5]' }];
   if (title.includes('greater than x')) return [{ input: 'numbers = [2, 8, 5, 10], x = 6', output: '[8, 10]' }];
   if (title.includes('sum of even')) return [{ input: '[1, 2, 4, 7]', output: '6' }];
   if (title.includes('negative numbers')) return [{ input: '[3, -1, 2, -4]', output: '[-1, -4, 3, 2]' }];
-  if (title.includes('closest number')) return [{ input: 'numbers = [1, 5, 8, 10], target = 6', output: '5' }];
+  if (title.includes('closest number')) return [{ input: 'numbers = [1, 4, 9, 12], target = 6', output: '4' }];
   if (title.includes('merge two sorted')) return [{ input: 'a = [1, 3, 5], b = [2, 4, 6]', output: '[1, 2, 3, 4, 5, 6]' }];
   if (title.includes('merge intervals')) return [{ input: '[[1, 3], [2, 6], [8, 10]]', output: '[[1, 6], [8, 10]]' }];
   if (title.includes('valid parentheses')) return [{ input: '"([])"', output: 'true' }];
-  if (title.includes('reverse linked')) return [{ input: '1 -> 2 -> 3 -> null', output: '3 -> 2 -> 1 -> null' }];
+  if (title.includes('reverse linked')) return [{ input: '1 -> 2 -> 3 -> null', output: '[3, 2, 1]' }];
   if (title.includes('merge two sorted lists')) return [{ input: '1 -> 3 and 2 -> 4', output: '1 -> 2 -> 3 -> 4' }];
   if (title.includes('buy/sell')) return [{ input: '[7, 1, 5, 3, 6, 4]', output: '5' }];
   if (title.includes('maximum subarray')) return [{ input: '[-2, 1, -3, 4, -1, 2, 1, -5, 4]', output: '6' }];
-  if (title.includes('binary search')) return [{ input: 'numbers = [1, 3, 5, 7], target = 5', output: 'index 2' }];
+  if (title.includes('binary search')) return [{ input: 'numbers = [1, 3, 5, 7], target = 5', output: '2' }];
   if (title.includes('3sum')) return [{ input: '[-1, 0, 1, 2, -1, -4]', output: '[[-1, -1, 2], [-1, 0, 1]]' }];
   if (title.includes('product of array')) return [{ input: '[1, 2, 3, 4]', output: '[24, 12, 8, 6]' }];
   if (title.includes('subarray sum')) return [{ input: 'numbers = [1, 1, 1], k = 2', output: '2' }];
@@ -1990,7 +2063,8 @@ export function getProblemExamples(problem: Problem): Example[] {
   if (title.includes('first repeating')) return [{ input: '"swiss"', output: 's' }];
   if (title.includes('largest number')) return [{ input: '[3, 9, 2, 7]', output: '9' }];
   if (title.includes('smallest number')) return [{ input: '[3, 9, 2, 7]', output: '2' }];
-  if (title.includes('two sum') || title.includes('pairs whose sum')) return [{ input: 'numbers = [2, 7, 11, 15], target = 9', output: '[0, 1]' }];
+  if (title.includes('pairs whose sum')) return [{ input: 'numbers = [2, 7, 11, 15], target = 9', output: '[[2, 7]]' }];
+  if (title.includes('two sum')) return [{ input: 'numbers = [2, 7, 11, 15], target = 9', output: '[0, 1]' }];
   if (title.includes('sort')) return [{ input: '[5, 1, 4, 2]', output: '[1, 2, 4, 5]' }];
   if (title.includes('move all zeros')) return [{ input: '[0, 1, 0, 3, 12]', output: '[1, 3, 12, 0, 0]' }];
   if (title.includes('anagram')) return [{ input: '"listen", "silent"', output: 'true' }];

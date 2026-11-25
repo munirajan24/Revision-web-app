@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createAppBackup, mergeInterviewStores, mergeJobApplicationStores, parseAppBackup } from './app-backup';
 import type { InterviewStore } from './interviews';
 import type { JobApplicationStore } from './job-applications';
+import { emptySmartRevisionData } from './smart-revision';
 
 const state = {
   coding: {
@@ -27,6 +28,8 @@ const state = {
   mobileInterview: {
     activeSession: null,
     history: [],
+    revision: emptySmartRevisionData(Date.parse('2026-10-06T12:00:00.000Z')),
+    learnProgress: { version: 1 as const, tracks: [] },
     questionStats: {
       version: 2 as const,
       questions: { 'mobile-question-1': { attended: 3, correct: 2, wrong: 1, skipped: 1 } },
@@ -63,6 +66,21 @@ describe('full application backup', () => {
       .toEqual({ attended: 3, correct: 2, wrong: 1, skipped: 1 });
   });
 
+  it('accepts version-3 Mobile Interview backups created before learn progress or revision data existed', () => {
+    const backup = createAppBackup(state, '2026-10-06T12:00:00.000Z');
+    const legacyMobile = { ...backup.mobileInterview, learnProgress: undefined, revision: undefined };
+    const parsed = parseAppBackup(JSON.stringify({ ...backup, mobileInterview: legacyMobile }), [1, 2]);
+    expect(parsed?.mobileInterview?.learnProgress).toEqual({ version: 1, tracks: [] });
+    expect(parsed?.mobileInterview?.revision).toEqual(emptySmartRevisionData());
+  });
+
+  it('ignores malformed optional revision data without rejecting other backup sections', () => {
+    const backup = createAppBackup(state, '2026-10-06T12:00:00.000Z');
+    const parsed = parseAppBackup(JSON.stringify({ ...backup, mobileInterview: { ...backup.mobileInterview, revision: { version: 99 } } }), [1, 2]);
+    expect(parsed?.interviews).toEqual(state.interviews);
+    expect(parsed?.mobileInterview?.revision).toEqual(emptySmartRevisionData());
+  });
+
   it('imports the previous coding-only and revision-data backup formats', () => {
     const oldCodingBackup = { version: 1, progress: { 1: { status: 'learning', attempts: 1 } }, drafts: {} };
     const oldRevisionBackup = { version: 1, catalog: state.interviews.catalog, interviews: [], jobApplications: state.jobApplications };
@@ -81,6 +99,10 @@ describe('full application backup', () => {
     expect(parseAppBackup(JSON.stringify({ ...backup, jobApplications: { version: 1 } }), [1])).toBeUndefined();
     expect(parseAppBackup(JSON.stringify({ ...backup, interviews: { version: 1, catalog: [{ id: 'bad' }], interviews: [] } }), [1])).toBeUndefined();
     expect(parseAppBackup(JSON.stringify({ ...backup, mobileInterview: { activeSession: null, history: [{ id: 'bad' }] } }), [1])).toBeUndefined();
+    expect(parseAppBackup(JSON.stringify({
+      ...backup,
+      mobileInterview: { ...backup.mobileInterview, learnProgress: { version: 1, tracks: [{ id: 'bad' }] } },
+    }), [1])).toBeUndefined();
   });
 
   it('merges interview and checklist records by ID', () => {

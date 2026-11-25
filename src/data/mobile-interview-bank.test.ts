@@ -68,8 +68,24 @@ describe('mobile interview question bank', () => {
       codingProblemId: 1,
       codingLanguage: 'kotlin',
     });
+
     expect(codingQuestions[0].answer).toBeTruthy();
     expect(codingSets.find((set) => set.title === 'Kotlin Coding')?.sections[0].questionCount).toBe(120);
+  });
+
+  it('can form learn tracks from source HTML questions and generated coding questions', () => {
+    const allQuestions = [...questions, ...codingQuestions];
+    const sourceSet = sets.find((set) => set.title === 'Kotlin');
+    const generatedSet = codingSets.find((set) => set.title === 'Kotlin Coding');
+    const sourceTrackQuestions = allQuestions.filter((question) => question.setId === sourceSet?.id
+      && sourceSet.sections.some((section) => section.id === question.sectionId));
+    const codingTrackQuestions = allQuestions.filter((question) => question.setId === generatedSet?.id
+      && generatedSet.sections.some((section) => section.id === question.sectionId));
+
+    expect(sourceTrackQuestions.length).toBeGreaterThan(0);
+    expect(sourceTrackQuestions.every((question) => questions.includes(question))).toBe(true);
+    expect(codingTrackQuestions.length).toBe(120);
+    expect(codingTrackQuestions.every((question) => question.codingProblemId !== undefined)).toBe(true);
   });
 
   it('returns the missing number as a scalar in both language references', () => {

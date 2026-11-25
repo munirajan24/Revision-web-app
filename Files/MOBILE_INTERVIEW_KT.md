@@ -1,23 +1,27 @@
 # Mobile Interview: Developer Knowledge Transfer
 
-This document explains the Mobile Interview feature end to end: where its questions come from, how the app parses them, how an interview session and timer work, how answers are checked, and where interview state is stored.
+This document explains Mobile Interview, Learn & Q&A, and Smart Revision: where questions come from, how sessions/timers and answer assessment work, and where progress is stored.
 
 ## 1. Feature map
 
 | Responsibility | Main file |
 |---|---|
-| App navigation, route query parameter, shell, and backup integration | [`src/App.tsx`](../src/App.tsx) |
+| App navigation, route query parameter, shell, local/Drive backup UI and full-app backup orchestration | [`src/App.tsx`](../src/App.tsx) |
 | Parse the source interview-question HTML and create source question records | [`src/data/interview-question-bank.ts`](../src/data/interview-question-bank.ts) |
 | Convert source questions and generated coding problems into Mobile Interview sets | [`src/data/mobile-interview-bank.ts`](../src/data/mobile-interview-bank.ts) |
 | Generated coding problem catalog, examples, contracts, and Kotlin/Java solutions | [`src/data/roadmap.ts`](../src/data/roadmap.ts) |
 | Session, timer, history, schedule, backup, Q&A formatting, and statistics rules | [`src/engine/mobile-interview.ts`](../src/engine/mobile-interview.ts) |
+| Learn & Q&A stage chunking, learned flags, progress validation and merge | [`src/engine/learn-track.ts`](../src/engine/learn-track.ts) |
+| Pure Smart Revision scheduling, selection, coverage, promotion, and merge rules | [`src/engine/smart-revision.ts`](../src/engine/smart-revision.ts) |
+| Google OAuth and private Drive backup discovery/upload/download | [`src/engine/google-drive-backup.ts`](../src/engine/google-drive-backup.ts) |
 | Screens, setup, question controls, feedback, and orchestration | [`src/components/MobileInterview.tsx`](../src/components/MobileInterview.tsx) |
+| Learn & Q&A track selection, stage map, flashcards, and quiz options | [`src/components/LearnQA.tsx`](../src/components/LearnQA.tsx) |
 | Coding editor, Kotlin/Java execution, expected-output check, and coding answer UI | [`src/components/CodingInterviewExperience.tsx`](../src/components/CodingInterviewExperience.tsx) |
 | Flexible output comparison for coding answers | [`src/utils/output-comparison.ts`](../src/utils/output-comparison.ts) |
 | Mobile Interview layout and responsive styles | [`src/styles.css`](../src/styles.css) |
 | Feature and behavior regression tests | [`src/engine/mobile-interview.test.ts`](../src/engine/mobile-interview.test.ts), [`src/data/mobile-interview-bank.test.ts`](../src/data/mobile-interview-bank.test.ts) |
 
-Navigation uses the `mobile-interview` view and `?tab=mobile-interview`. In the sidebar, “Mobile interview” is directly below Dashboard.
+Navigation uses the `mobile-interview` view and `?tab=mobile-interview`. The home actions are Learn & Q&A, Smart Revision, New interview, Categories, and History. Learn & Q&A sets `&mode=learn`; Smart Revision sets `&mode=revision`. In the sidebar, “Mobile interview” is directly below Dashboard.
 
 ## 2. Data sources and question-bank construction
 
@@ -193,10 +197,14 @@ Mobile Interview state is stored in browser `localStorage` using these keys:
 | `kotlin-interview-trainer-mobile-interview-history-v1` | Finished interview sessions |
 | `kotlin-interview-trainer-mobile-interview-schedule-v1` | Calendar schedules and timer/randomization settings |
 | `kotlin-interview-trainer-mobile-interview-question-stats-v1` | Per-question statistics and deduplication event IDs |
+| `kotlin-interview-trainer-mobile-learn-progress-v1` | Learn tracks, question learning flags, and stage quiz summaries |
+| `kotlin-interview-trainer-mobile-revision-v1` | Smart Revision question memory records, preferences, interview date, and assessment idempotency events |
 
 Session serialization is validated by `parseMobileInterviewSession` before being trusted. It checks status, timing, active index, prompt structure and optional fields; malformed JSON or incompatible data is ignored rather than crashing the screen. Legacy sessions are normalized/migrated when loaded. History contains finished sessions and is ordered newest first.
 
-The app's backup integration in [`App.tsx`](../src/App.tsx) calls `loadMobileInterviewBackup` / `saveMobileInterviewBackup`. The backup bundle includes the active session, finished history, schedules, and the complete per-question statistics record, including attendance/skip deduplication events and answer-result events. Both local JSON export/import and the optional manual Google Drive backup use this same full-app backup bundle. Restoring with **Merge / Add** merges statistics by unique session + prompt event, avoiding duplicate counts while retaining new events from either backup; when an answered question replaces a previous skip, attendance takes precedence over that skip.
+The app's backup integration in [`App.tsx`](../src/App.tsx) calls `loadMobileInterviewBackup` / `saveMobileInterviewBackup`. The bundle includes the active session, finished history, schedules, question statistics, Learn & Q&A progress, and Smart Revision data. Both local JSON export/import and optional manual Google Drive backup use this same full-app bundle. Restoring with **Merge / Add** unions statistics by unique session + prompt event and merges revision priorities, memory records, coverage cycle, settings, and interview date. **Replace** replaces the complete Mobile Interview section.
+
+The full app backup remains version 3. Statistics, Learn progress, and Smart Revision fields are optional when parsing older version-3 backups; missing fields restore as empty state. Invalid optional Smart Revision data is ignored without rejecting the other backup sections. Newly exported version-3 backups include all three payloads.
 
 ### Per-question statistics
 
@@ -216,6 +224,30 @@ Counters are persisted independently from the active session:
 - Starting another session permits a new attendance/result for the same question.
 - “Clear stats” removes the statistics storage key after confirmation. It does not delete interview sessions or history.
 - Older version-1 view-based stats are intentionally treated as invalid and reset, because they counted merely opening questions as attended.
+
+### Learn & Q&A (Version 2)
+
+Learn & Q&A reuses the same source/generated question bank, prompt/session schema, timers, coding runner, grading, question-stat recorders, and Smart Revision scheduler. Flashcard answers are always visible and do not mark a question attended. Explicit **Got it** and **Need review** actions update separate learning flags; assessed quiz answers and skips update both existing interview statistics and revision scheduling. A blank Learn quiz submission is recorded as skipped and opens feedback instead of advancing immediately; **View answer** remains available before continuing. Empty coding submissions use the coding verification dialog, which marks the prompt skipped and offers **View answer**. The quiz-options defaults include already-correct questions, shuffle questions, use a 2-minute ordinary-question timer, and use a 10-minute program timer.
+
+Learn state uses `kotlin-interview-trainer-mobile-learn-progress-v1`, separate from question statistics. The pure engine in [`learn-track.ts`](../src/engine/learn-track.ts) chunks bank-order question IDs by the saved stage size (3, 5, or 10), derives stage IDs from track ID + size + ordinal, tracks learned/review/important flags by question ID, computes the Mistakes pool, and merges backup progress. The component filters removed question IDs against the current bank at runtime. Coding-only tracks default to stage size 3; learners may choose another size.
+
+Learn quizzes are ordinary `MobileInterviewSession` records with optional `mode: 'learn'`, `trackId`, and `stageId`; the session schema remains version 1 and older sessions parse as interview mode. Learn quizzes appear in the existing History, can be resumed through the regular active-session path, and save one latest stage summary on finish. The Learn recap lists wrong and skipped questions with their reference answers and offers a direct next-stage action. Aborting does not add a summary or roll back already-recorded statistics or revision assessments. A stage is mastered when the latest result for every question in that track's Learn quizzes is correct (100% pass threshold, centralized as `LEARN_PASS_PERCENT`).
+
+Learn progress is included in the existing version-3 full-app backup bundle. Missing `learnProgress` in older version-3 files parses as empty; malformed present learn data rejects that full backup rather than partially restoring it. Replace writes the incoming Learn section, and Merge unions track/question flags, lets learned win over need-review, keeps the earliest learned timestamp, latest stage quiz by finish time, and the most recently touched stage pointer. Reset Learn progress never clears attendance/correct/wrong/skipped statistics. The existing **Clear stats** control remains separate.
+
+### Smart Revision (Version 1)
+
+Smart Revision is a separate home mode (`?mode=revision`) that builds weighted, non-duplicating sessions and reuses the normal Mobile Interview session, timer, coding verification, answer assessment, recap, and History flows. The session remains schema version 1 and stores optional `mode: 'revision'` plus per-prompt `pickReason`.
+
+The pure scheduler in [`smart-revision.ts`](../src/engine/smart-revision.ts) accepts an explicit clock and random function. Question records are keyed by stable bank question ID. Correct answers advance boxes 1–5; wrong answers return to box 1 and become due immediately; skips preserve their box and become due within a day. Runner failures do not update a schedule. Assessment events use session ID + prompt ID so reassessment replaces that event, while manual priority survives result reassessment. Existing interview and Learn assessments use the same scheduler; opening a question or revealing an answer does not.
+
+Selection precedence is Due, Weak, New, then Rest. Weighted sampling is without replacement; unseen normal questions are exhausted before normal repeats. Priority and weak questions can recur sooner. A single bank-wide cycle is advanced once all questions in the selected candidate scope have been seen; displayed coverage is calculated from the current scope. An optional interview date shifts the Due/Weak/New/priority mix for the 14+, 7–13, 2–6, and 0–1 day windows. The setup supports question scope, 5/10/15/20/30 question sessions, date, and editable Due/Weak/New percentages.
+
+The revision localStorage payload has its own schema version 1 and does not change question-statistics or Learn-progress schemas. Missing or malformed optional revision data in a version-3 app backup becomes empty revision state without discarding other backup sections. Merge takes the maximum priority/cycle, uses the more recently assessed memory record, and takes global settings/date from the newer modified block (incoming wins ties). History has a Revision filter. Permanent priority is editable from session prompts and Learn cards; repeated errors can auto-promote a question and are shown in the UI.
+
+Tunable defaults in `SMART_REVISION_CONFIG`: box gaps `[1, 3, 7, 14, 30]` days; priority gap multipliers `1`, `0.75`, and `0.5`; default session size `10` (allowed `5`–`30`); default pool mix Due/Weak/New `30/20/50`; score weights overdue/priority/error/unseen/age/recent `3/1.5/2/1/0.5/-2`.
+
+Remaining scope exclusions are notifications, calendar due-question integration, automatic cloud sync, read-aloud, personal notes, global search, and daily goals/streaks. Manual full-app local and Google Drive backups include revision data.
 
 ## 8. Copy/export and reference content
 
@@ -239,10 +271,11 @@ Useful focused commands:
 
 ```powershell
 npx vitest run src/engine/mobile-interview.test.ts src/data/mobile-interview-bank.test.ts
+npx vitest run src/engine/smart-revision.test.ts
 npm run build
 ```
 
-The engine tests cover session creation/navigation, timers, persistence/legacy parsing, backups, history/schedules, retries, QA formatting, and statistics. The bank tests cover stable source mapping, set counts, generated coding set counts, coding HTML parsing/solution pairing, and selected generated expected-output regressions.
+The engine tests cover session creation/navigation, timers, persistence/legacy parsing, backups, history/schedules, retries, QA formatting, statistics, and deterministic Smart Revision scheduling/simulation. The bank tests cover stable source mapping, set counts, generated coding set counts, coding HTML parsing/solution pairing, and selected generated expected-output regressions.
 
 ## 11. Complete user-flow map
 
@@ -264,12 +297,16 @@ App navigation (?tab=mobile-interview)
               -> new round / home / history dialog
      -> Categories: browse set and section counts, select a set into setup
      -> History: inspect completed sessions and per-question outcomes
+     -> Smart Revision (?mode=revision)
+        -> choose scope, session size, optional interview date, and pool mix
+        -> build weighted Due/Weak/New/Priority picks
+        -> reuse question session, assessments, timers, coding verification, recap and History
      -> Calendar: browse dates, start/remove schedules already present in storage
 ```
 
 ### Home, setup, and selection details
 
-- The home screen has a resume card when an unfinished session exists, plus New interview, Categories, History, and a month calendar.
+- The home screen has a resume card when an unfinished session exists, then Learn & Q&A, Smart Revision, New interview, Categories, History, and a month calendar. Learn & Q&A is the first home action rather than a persistent Interview/Learn toggle.
 - The resume card restores the saved prompt. A paused session resumes its timer; an expired coding prompt advances through the coding continuation path.
 - Categories is an informational library; selecting one preselects its set and every section, then opens setup.
 - Setup starts with no categories selected. Category “Select all” / “Clear” updates both selected set IDs and the section IDs that belong to those sets. Section-level selection can then narrow the question pool. The available-question count is computed from selected set + section IDs.
@@ -357,7 +394,9 @@ This parser operates at app build/module load time; it does not fetch HTML from 
 | Current prompt index, answers, flags, timers, code, verification | `MobileInterviewSession` in engine/localStorage | Yes |
 | Completed attempts | `history` localStorage key | Yes |
 | Calendar schedules | `schedules` localStorage key | Yes |
-| Per-question counters/dedupe events | `question-stats` localStorage key | Yes, but not app-backup exported |
+| Per-question counters/dedupe events | `question-stats` localStorage key | Yes; included in full local and Drive app backups |
+| Learn tracks, per-question learned/review flags, and stage quiz summaries | `learn-progress` localStorage key | Yes; included in full local and Drive app backups |
+| Smart Revision per-question memory and settings | `revision-v1` localStorage key | Yes; included in full local and Drive app backups |
 | Setup selections, time picker draft, show-history dialog | `MobileInterview` React state | No |
 | Coding editor size, solution selector, output drawer, runner transient result | `CodingInterviewExperience` React state | No (except verification/code copied back to prompt) |
 | Selected app tab | App URL `?tab=...` and app view state | URL/history state |
@@ -373,12 +412,24 @@ This parser operates at app build/module load time; it does not fetch HTML from 
 
 ### App-level backup
 
-Settings' full JSON backup is version 3 and contains `mobileInterview` as one section. `parseMobileInterviewBackup` checks the active session, finished history, and schedule shapes before import. Import can replace or merge:
+Settings' full JSON backup is version 3 and contains `mobileInterview` as one section. `parseMobileInterviewBackup` validates the active session, finished history, schedules, and optional question-statistics, Learn, and Smart Revision payloads. Missing or invalid optional revision data is treated as empty without rejecting other valid sections; new exports always include it. Import can replace or merge:
 
-- Replace writes the incoming active session/history/schedules for that section.
+- Replace writes the incoming active session/history/schedules/stats/Learn/revision data for that section.
 - Merge deduplicates history and schedules by ID, sorts them, and keeps the current active session if the incoming backup has none; incoming non-null active session takes precedence.
-- Question stats are omitted from this backup contract, so they neither replace nor merge.
+- Stats merge using session ID + prompt ID event keys. Duplicate events from the same backup copied across devices count once; events found in only one backup are retained. For a given event, attended takes precedence over skipped, and the latest answer result in the merged data determines correct vs wrong.
+- Revision merge uses maximum priority and cycle, takes the memory schedule from the more recently seen copy, and uses the newer global settings/date block (incoming wins ties).
 - Older app backup versions (1/2) predate the Mobile Interview section.
+
+### Local file backup vs Google Drive
+
+The controls live in **Settings → Data** and are deliberately separate:
+
+- **Local backup · This device**: **Export Local Backup** downloads the version-3 full-app JSON file; **Import Local Backup** reads a user-selected JSON file. It requires no Google sign-in and does not upload data.
+- **Google Drive backup · Cloud**: optional manual backup using Google Identity Services and Drive's private `appDataFolder`. The file is named `kotlin-interview-trainer-backup.json`; there is one file that is created on first save and updated on subsequent saves. The entire same full-app JSON is saved, including Mobile Interview history, schedules, question stats, Learn progress, and Smart Revision data. There is no automatic/background sync.
+- After successful Google authorization, the UI checks whether the Drive backup exists and shows its filename, last-modified timestamp, and size when Google provides them. **Refresh backup status** checks again; save and restore refresh the status too. A successful authorization with no matching file is shown as “No backup found,” distinct from an unchecked/error state.
+- Restore downloads and validates the JSON, then opens the same explicit **Merge / Add** or **Replace** confirmation used by local import. Merely signing in or checking status does not upload or alter local progress.
+- The selected Google account email is remembered in localStorage so the UI can offer **Continue as** after page refresh. OAuth access tokens are short-lived and are not persisted; reconnecting asks Google for a fresh token. **Log out** clears the in-memory token and remembered email on this device. It does not sign the user out of Google globally, revoke Google consent, or delete the Drive backup.
+- Google Drive support requires the public OAuth Web client ID as the build-time `VITE_GOOGLE_CLIENT_ID`. Local Vite uses `.env.local`; the deployed Render build needs this value in Render's environment and a fresh deployment. Google Cloud must have the exact app URL configured as an Authorized JavaScript origin. See [`docs/GOOGLE_DRIVE_BACKUP.md`](../../docs/GOOGLE_DRIVE_BACKUP.md) for setup details. No client secret belongs in the browser app.
 
 ### Important local-only and operational constraints
 
@@ -398,7 +449,7 @@ These are current behavior, not assumptions for new feature design:
 5. Coding verification is a single displayed-example output check, not hidden tests, and solution tests are not run automatically.
 6. General Q&A export includes typed answers, selected options, coding drafts, and the first/default generated coding reference solution. It does not include every alternative solution variant.
 7. Q&A export is available from recap, not as a general export action on the setup/home screen.
-8. Per-question statistics survive reloads and are included in full local and Google Drive app backups.
+8. Per-question statistics survive reloads and are included in full local and Google Drive app backups. Existing backups exported before the stats backup field was added cannot restore counters that were never in those files.
 9. Session/history/schedule/statistics data is stored in localStorage for the current browser origin. An optional manual Google Drive backup can copy and restore it across origins/devices; there is no automatic cloud sync.
 10. Calendar counts include completed/in-progress sessions by start date as well as future/unstarted schedules; a schedule attached to a session is not counted twice as a pending schedule.
 

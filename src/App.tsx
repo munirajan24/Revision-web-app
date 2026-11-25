@@ -36,7 +36,7 @@ const backupSectionLabels: Record<AppBackupSection, string> = {
   completeRevision: 'Complete Revision question progress',
   interviews: 'Interview and checklist data',
   jobApplications: 'Job-application calendar',
-  mobileInterview: 'Mobile interview sessions and history',
+  mobileInterview: 'Mobile interview sessions, Learn & Q&A progress, Smart Revision, and history',
 };
 
 const viewByTab: Record<string, View> = {
@@ -369,12 +369,14 @@ export default function App() {
     }
     setMobileNavOpen(false);
     setView(nextView);
-    const url = new URL(window.location.href);
+    const currentUrl = window.location.href;
+    const url = new URL(currentUrl);
     const tab = tabByView[nextView];
+    if (nextView !== 'mobile-interview') url.searchParams.delete('mode');
     if (url.searchParams.get('tab') !== tab) {
       url.searchParams.set('tab', tab);
-      window.history.pushState({}, '', url);
     }
+    if (url.href !== currentUrl) window.history.pushState({}, '', url);
   };
 
   useEffect(() => {
@@ -1002,9 +1004,6 @@ export default function App() {
             </h1>
           </div>
           <div className="mobile-app-header-actions">
-            {view === 'mobile-interview' && (
-              <button type="button" className="secondary-button mobile-interview-shell-button" onClick={() => navigateToView('dashboard')}>‹ Back</button>
-            )}
             <button
               type="button"
               className="secondary-button mobile-app-menu-toggle"

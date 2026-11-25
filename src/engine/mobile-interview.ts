@@ -1,4 +1,14 @@
 import { isCalendarDate, type ChecklistItem } from './interviews';
+import { emptyLearnProgress, loadLearnProgress, mergeLearnProgress, parseLearnProgress, saveLearnProgress, type LearnProgress } from './learn-track';
+import {
+  emptySmartRevisionData,
+  loadSmartRevisionData,
+  mergeSmartRevisionData,
+  parseSmartRevisionData,
+  saveSmartRevisionData,
+  type RevisionPickReason,
+  type SmartRevisionData,
+} from './smart-revision';
 
 export type MobileInterviewTrack = 'kotlin' | 'spring-boot' | 'mixed';
 export type MobileInterviewStatus = 'running' | 'paused' | 'finished';
@@ -49,6 +59,7 @@ export interface MobileInterviewPrompt {
   codingProblemCollapsed?: boolean;
   codingVerification?: MobileCodingVerification;
   codingRetryUsed?: boolean;
+  pickReason?: RevisionPickReason;
 }
 
 export interface TimedMobileInterviewPrompt extends MobileInterviewPrompt {
@@ -73,6 +84,9 @@ export interface MobileInterviewSession {
   title?: string;
   setIds?: string[];
   scheduleId?: string;
+  mode?: 'interview' | 'learn' | 'revision';
+  stageId?: string;
+  trackId?: string;
   untimed?: boolean;
 }
 
@@ -316,6 +330,9 @@ export function createMobileInterviewSession(
     untimed?: boolean;
     questionTimeLimitSeconds?: number;
     programQuestionTimeLimitSeconds?: number;
+    mode?: 'interview' | 'learn' | 'revision';
+    stageId?: string;
+    trackId?: string;
   } = {},
 ): MobileInterviewSession {
   if (prompts.length === 0) throw new Error('Choose at least one interview prompt.');
@@ -372,6 +389,9 @@ export function createMobileInterviewSession(
     ...(options.title ? { title: options.title } : {}),
     ...(options.setIds ? { setIds: [...options.setIds] } : {}),
     ...(options.scheduleId ? { scheduleId: options.scheduleId } : {}),
+    ...(options.mode ? { mode: options.mode } : {}),
+    ...(options.stageId ? { stageId: options.stageId } : {}),
+    ...(options.trackId ? { trackId: options.trackId } : {}),
     untimed: options.untimed === true,
   };
 }
@@ -598,6 +618,9 @@ export function parseMobileInterviewSession(value: unknown): MobileInterviewSess
     || (value.title !== undefined && typeof value.title !== 'string')
     || (value.setIds !== undefined && (!Array.isArray(value.setIds) || !value.setIds.every((id) => typeof id === 'string')))
     || (value.scheduleId !== undefined && typeof value.scheduleId !== 'string')
+    || (value.mode !== undefined && value.mode !== 'interview' && value.mode !== 'learn' && value.mode !== 'revision')
+    || (value.stageId !== undefined && typeof value.stageId !== 'string')
+    || (value.trackId !== undefined && typeof value.trackId !== 'string')
     || (value.untimed !== undefined && typeof value.untimed !== 'boolean')) return undefined;
 
   const isLegacySession = value.questionDurationSeconds === undefined;
@@ -639,6 +662,9 @@ export function parseMobileInterviewSession(value: unknown): MobileInterviewSess
     ...(typeof value.title === 'string' ? { title: value.title } : {}),
     ...(Array.isArray(value.setIds) ? { setIds: [...value.setIds] } : {}),
     ...(typeof value.scheduleId === 'string' ? { scheduleId: value.scheduleId } : {}),
+    mode: value.mode === 'learn' || value.mode === 'revision' ? value.mode : 'interview',
+    ...(typeof value.stageId === 'string' ? { stageId: value.stageId } : {}),
+    ...(typeof value.trackId === 'string' ? { trackId: value.trackId } : {}),
     untimed: isUntimed || value.untimed === undefined,
   };
 }
@@ -718,6 +744,8 @@ export interface MobileInterviewBackup {
   history: MobileInterviewSession[];
   schedules: MobileInterviewSchedule[];
   questionStats: MobileInterviewQuestionStatsBackup;
+  learnProgress: LearnProgress;
+  revision?: SmartRevisionData;
 }
 
 export function loadMobileInterviewBackup(storage: Pick<Storage, 'getItem'>): MobileInterviewBackup {
@@ -726,6 +754,8 @@ export function loadMobileInterviewBackup(storage: Pick<Storage, 'getItem'>): Mo
     history: loadMobileInterviewHistory(storage),
     schedules: loadMobileInterviewSchedules(storage),
     questionStats: readStoredMobileInterviewQuestionStats(storage),
+    learnProgress: loadLearnProgress(storage),
+    revision: loadSmartRevisionData(storage),
   };
 }
 
@@ -737,6 +767,8 @@ export function saveMobileInterviewBackup(
   saveMobileInterviewHistory(storage, backup.history);
   saveMobileInterviewSchedules(storage, backup.schedules);
   saveMobileInterviewQuestionStats(storage, backup.questionStats);
+  saveLearnProgress(storage, backup.learnProgress);
+  if (backup.revision) saveSmartRevisionData(storage, backup.revision);
 }
 
 export function parseMobileInterviewBackup(value: unknown): MobileInterviewBackup | undefined {
@@ -751,13 +783,21 @@ export function parseMobileInterviewBackup(value: unknown): MobileInterviewBacku
   const questionStats = value.questionStats === undefined
     ? emptyMobileInterviewQuestionStats()
     : parseMobileInterviewQuestionStatsBackup(value.questionStats);
+  const learnProgress = value.learnProgress === undefined
+    ? emptyLearnProgress()
+    : parseLearnProgress(value.learnProgress);
+  const revision = value.revision === undefined
+    ? emptySmartRevisionData()
+    : parseSmartRevisionData(value.revision) ?? emptySmartRevisionData();
   if (!history.every((session) => session?.status === 'finished')
-    || !schedules || !schedules.every((schedule) => schedule !== undefined) || !questionStats) return undefined;
+    || !schedules || !schedules.every((schedule) => schedule !== undefined) || !questionStats || !learnProgress) return undefined;
   return {
     activeSession,
     history: history as MobileInterviewSession[],
     schedules: schedules as MobileInterviewSchedule[],
     questionStats,
+    learnProgress,
+    revision,
   };
 }
 
@@ -774,6 +814,8 @@ export function mergeMobileInterviewBackups(
     history: [...historyById.values()].sort((first, second) => (second.finishedAt ?? 0) - (first.finishedAt ?? 0)),
     schedules: [...schedulesById.values()].sort((first, second) => first.date.localeCompare(second.date)),
     questionStats: mergeMobileInterviewQuestionStats(current.questionStats, incoming.questionStats),
+    learnProgress: mergeLearnProgress(current.learnProgress, incoming.learnProgress),
+    revision: mergeSmartRevisionData(current.revision ?? emptySmartRevisionData(), incoming.revision ?? emptySmartRevisionData()),
   };
 }
 
@@ -941,7 +983,8 @@ function parsePrompt(
     || typeof value.skipped !== 'boolean'
     || typeof value.important !== 'boolean'
     || typeof value.referenceRevealed !== 'boolean'
-    || typeof value.note !== 'string') return undefined;
+    || typeof value.note !== 'string'
+    || (value.pickReason !== undefined && !['due', 'weak', 'new', 'priority', 'filler'].includes(String(value.pickReason)))) return undefined;
   const kind = value.kind === undefined ? undefined : value.kind;
   const options = value.options === undefined ? undefined : value.options;
   if ((kind !== undefined && kind !== 'short-answer' && kind !== 'coding' && kind !== 'mcq')
@@ -1021,6 +1064,7 @@ function parsePrompt(
     ...(typeof value.codingProblemCollapsed === 'boolean' ? { codingProblemCollapsed: value.codingProblemCollapsed } : {}),
     ...(typeof value.codingRetryUsed === 'boolean' ? { codingRetryUsed: value.codingRetryUsed } : {}),
     ...(isMobileCodingVerification(value.codingVerification) ? { codingVerification: { ...value.codingVerification } } : {}),
+    ...(typeof value.pickReason === 'string' ? { pickReason: value.pickReason as RevisionPickReason } : {}),
     timeLimitSeconds,
     remainingSeconds,
     timeExpired,

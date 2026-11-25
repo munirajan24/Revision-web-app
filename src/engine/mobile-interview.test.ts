@@ -35,6 +35,7 @@ import {
   type MobileInterviewPrompt,
   type MobileInterviewSchedule,
 } from './mobile-interview';
+import { LEARN_PROGRESS_STORAGE_KEY } from './learn-track';
 
 function prompt(id: string): MobileInterviewPrompt {
   return {
@@ -499,11 +500,45 @@ describe('mobile interview sessions', () => {
       skippedEvents: [],
       answerEvents: {},
     };
+    const emptyLearnProgress = { version: 1 as const, tracks: [] };
     expect(mergeMobileInterviewBackups(
-      { activeSession: null, history: [finished], schedules: [schedule], questionStats: emptyQuestionStats },
-      { activeSession: null, history: [second], schedules: [{ ...schedule, id: 'schedule-2' }], questionStats: emptyQuestionStats },
+      { activeSession: null, history: [finished], schedules: [schedule], questionStats: emptyQuestionStats, learnProgress: emptyLearnProgress },
+      { activeSession: null, history: [second], schedules: [{ ...schedule, id: 'schedule-2' }], questionStats: emptyQuestionStats, learnProgress: emptyLearnProgress },
     )).toMatchObject({ history: [second, finished], schedules: [schedule, { ...schedule, id: 'schedule-2' }] });
+    expect(parseMobileInterviewBackup({ activeSession: null, history: [finished] })?.learnProgress).toEqual(emptyLearnProgress);
     expect(parseMobileInterviewBackup({ activeSession: null, history: [{ id: 'invalid' }] })).toBeUndefined();
+  });
+
+  it('round-trips optional learn session metadata without changing the session version', () => {
+    const learnSession = createMobileInterviewSession([prompt('learn-q')], 'kotlin', 0, 1_000, {
+      untimed: true,
+      mode: 'learn',
+      trackId: 'track-id',
+      stageId: 'stage-id',
+    });
+    expect(parseMobileInterviewSession(learnSession)).toMatchObject({
+      version: 1,
+      mode: 'learn',
+      trackId: 'track-id',
+      stageId: 'stage-id',
+    });
+    const { mode: _mode, trackId: _trackId, stageId: _stageId, ...legacySession } = learnSession;
+    expect(parseMobileInterviewSession(legacySession)?.mode).toBe('interview');
+  });
+
+  it('round-trips revision mode and pick reasons without changing the session version', () => {
+    const revisionSession = createMobileInterviewSession(
+      [{ ...prompt('revision-q'), pickReason: 'priority' }],
+      'kotlin',
+      0,
+      1_000,
+      { untimed: true, mode: 'revision' },
+    );
+    expect(parseMobileInterviewSession(revisionSession)).toMatchObject({
+      version: 1,
+      mode: 'revision',
+      prompts: [{ pickReason: 'priority' }],
+    });
   });
 
   it('backs up and restores Mobile Interview attendance, correct, wrong, and skipped stats', () => {
@@ -513,14 +548,20 @@ describe('mobile interview sessions', () => {
     recordMobileInterviewQuestionSkipped(source, 'session-2', 'question-1');
     const backup = loadMobileInterviewBackup(source);
     const destination = memoryStorage();
+    destination.setItem(LEARN_PROGRESS_STORAGE_KEY, JSON.stringify({
+      version: 1,
+      tracks: [{ id: 'old', setIds: ['s'], sectionIds: ['x'], stageSize: 3, lastOpenedAt: 1, questions: {}, stageQuizzes: {} }],
+    }));
 
     saveMobileInterviewBackup(destination, backup);
 
     expect(loadMobileInterviewBackup(destination).questionStats).toEqual(backup.questionStats);
+    expect(loadMobileInterviewBackup(destination).learnProgress).toEqual({ version: 1, tracks: [] });
     expect(loadMobileInterviewQuestionStats(destination)).toEqual({
       'question-1': { attended: 1, correct: 0, wrong: 1, skipped: 1 },
     });
     expect(parseMobileInterviewBackup(backup)).toEqual(backup);
+    expect(parseMobileInterviewBackup({ ...backup, learnProgress: { version: 2, tracks: [] } })).toBeUndefined();
   });
 
   it('merges Mobile Interview stats by unique interview-question events', () => {

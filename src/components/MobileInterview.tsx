@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react';
 import QuestionAnswer from './QuestionAnswer';
 import CodingInterviewExperience, { CodingInterviewErrorBoundary } from './CodingInterviewExperience';
+import LearnQA from './LearnQA';
 import { interviewQuestions } from '../data/interview-question-bank';
 import { getMobileCodingQuestionBank, getMobileQuestionBank, getMobileQuestionSets, type MobileBankQuestion } from '../data/mobile-interview-bank';
 import { formatAppDate, formatAppDateKey, formatAppDateTime, formatAppFileDateTime } from '../utils/date-format';
@@ -33,14 +34,54 @@ import {
   type MobileInterviewSession,
   type MobileInterviewTrack,
 } from '../engine/mobile-interview';
+import {
+  applyRevisionAssessment,
+  autoPromoteQuestion,
+  buildRevisionSelection,
+  calculateCoverage,
+  DAY_MS,
+  getRevisionRecord,
+  getRevisionSummary,
+  loadSmartRevisionData,
+  saveSmartRevisionData,
+  setRevisionPriority,
+  SMART_REVISION_CONFIG,
+  type RevisionPriority,
+  type RevisionPickReason,
+  type RevisionResult,
+  type SmartRevisionData,
+} from '../engine/smart-revision';
+import {
+  getLearnStages,
+  loadLearnProgress,
+  recordLearnQuizSummary,
+  saveLearnProgress,
+  type LearnProgress,
+  type LearnStage,
+  type LearnTrackProgress,
+} from '../engine/learn-track';
 
-type MobileInterviewScreen = 'home' | 'practice' | 'sets' | 'history' | 'session' | 'recap';
+type MobileInterviewScreen = 'home' | 'practice' | 'sets' | 'history' | 'revision' | 'session' | 'recap';
 
 const QUESTION_TIME_OPTIONS = [30, ...Array.from({ length: 30 }, (_, index) => (index + 1) * 60)];
 
 export default function MobileInterview() {
   const [session, setSession] = useState<MobileInterviewSession | null>(() => loadMobileInterviewSession(localStorage));
-  const [screen, setScreen] = useState<MobileInterviewScreen>('home');
+  const [screen, setScreen] = useState<MobileInterviewScreen>(() => new URLSearchParams(window.location.search).get('mode') === 'revision' ? 'revision' : 'home');
+  const [learnMode, setLearnMode] = useState(() => new URLSearchParams(window.location.search).get('mode') === 'learn');
+  const [learnProgress, setLearnProgress] = useState<LearnProgress>(() => loadLearnProgress(localStorage));
+  const [revisionData, setRevisionData] = useState<SmartRevisionData>(() => loadSmartRevisionData(localStorage));
+  const [revisionSetupOpen, setRevisionSetupOpen] = useState(false);
+  const [revisionSetIds, setRevisionSetIds] = useState<string[]>([]);
+  const [revisionSectionIds, setRevisionSectionIds] = useState<string[]>([]);
+  const [revisionSessionSize, setRevisionSessionSize] = useState<number>(() => revisionData.settings.sessionSize);
+  const [revisionAdvancedOpen, setRevisionAdvancedOpen] = useState(false);
+  const [revisionNotice, setRevisionNotice] = useState('');
+  const revisionDialogRef = useRef<HTMLElement>(null);
+  const revisionCloseButtonRef = useRef<HTMLButtonElement>(null);
+  const [learnResumeTrackId, setLearnResumeTrackId] = useState('');
+  const [learnResumeStageId, setLearnResumeStageId] = useState('');
+  const [historyFilter, setHistoryFilter] = useState<'all' | 'interview' | 'learn' | 'revision'>('all');
   const [importantOnly, setImportantOnly] = useState(false);
   const [storageError, setStorageError] = useState('');
   const [questionBank] = useState(() => [...getMobileQuestionBank(), ...getMobileCodingQuestionBank()]);
@@ -68,7 +109,7 @@ export default function MobileInterview() {
   const longPressOrigin = useRef<{ x: number; y: number } | null>(null);
   const longPressPointerType = useRef('');
   const longPressHandled = useRef(false);
-  const [feedback, setFeedback] = useState<{ promptId: string; result: 'correct' | 'incorrect' | 'submitted'; reveal: boolean; answerViewed: boolean } | null>(null);
+  const [feedback, setFeedback] = useState<{ promptId: string; result: 'correct' | 'incorrect' | 'submitted' | 'skipped'; reveal: boolean; answerViewed: boolean } | null>(null);
   const selectedSets = useMemo(
     () => questionSets.filter((set) => selectedSetIds.includes(set.id)),
     [questionSets, selectedSetIds],
@@ -89,7 +130,109 @@ export default function MobileInterview() {
   ),
   [questionBank, selectedSectionIds, selectedSetIds]);
   const hasProgramQuestions = availablePrompts.some(isProgramInterviewPrompt);
+  const revisionQuestions = useMemo(() => questionBank.map((question) => ({
+    id: question.id,
+    sectionId: question.sectionId,
+    stats: questionStats[question.id],
+  })), [questionBank, questionStats]);
+  const revisionSetupInputs = useMemo(() => questionBank
+    .filter((question) => revisionSetIds.includes(question.setId) && revisionSectionIds.includes(question.sectionId))
+    .map((question) => ({ id: question.id, sectionId: question.sectionId, stats: questionStats[question.id] })),
+  [questionBank, questionStats, revisionSectionIds, revisionSetIds]);
+  const revisionSetupPreview = useMemo(() => {
+    if (!revisionSetupOpen) return null;
+    return buildRevisionSelection(revisionData, revisionSetupInputs, {
+      now: clockNow,
+      random: () => 0.5,
+      sessionSize: revisionSessionSize,
+    }).picks;
+  }, [clockNow, revisionData, revisionSessionSize, revisionSetupInputs, revisionSetupOpen]);
+  const revisionSummary = useMemo(() => getRevisionSummary(revisionQuestions, revisionData, clockNow), [revisionData, revisionQuestions, clockNow]);
+  const revisionCountdownDays = revisionData.interviewDate === null
+    ? null
+    : Math.floor((new Date(revisionData.interviewDate).setHours(0, 0, 0, 0) - new Date(clockNow).setHours(0, 0, 0, 0)) / DAY_MS);
   const calendarDays = useMemo(() => getCalendarDays(calendarMonth), [calendarMonth]);
+
+  const updateLearnMode = (enabled: boolean, addHistoryEntry = true) => {
+    if (enabled && session?.status === 'running') {
+      if (!window.confirm('Enter Learn & Q&A? The current interview question will be paused.')) return;
+      const paused = pauseMobileInterviewSession(session);
+      try {
+        saveMobileInterviewSession(localStorage, paused);
+        setSession(paused);
+      } catch {
+        setStorageError('The interview could not be saved. Stay on this screen and try again.');
+        return;
+      }
+    }
+    setLearnMode(enabled);
+    const url = new URL(window.location.href);
+    if (enabled) url.searchParams.set('mode', 'learn');
+    else url.searchParams.delete('mode');
+    window.history[addHistoryEntry ? 'pushState' : 'replaceState']({}, '', url);
+  };
+
+  const updateRevisionMode = (enabled: boolean) => {
+    if (enabled && session && session.status !== 'finished') {
+      if (!window.confirm('Enter Smart Revision? The current interview will be paused and kept for later.')) return;
+      if (session.status === 'running') {
+        const paused = pauseMobileInterviewSession(session);
+        try {
+          saveMobileInterviewSession(localStorage, paused);
+          setSession(paused);
+        } catch {
+          setStorageError('The interview could not be saved. Stay on this screen and try again.');
+          return;
+        }
+      }
+    }
+    setLearnMode(false);
+    setScreen(enabled ? 'revision' : 'home');
+    const url = new URL(window.location.href);
+    if (enabled) url.searchParams.set('mode', 'revision');
+    else url.searchParams.delete('mode');
+    window.history.pushState({}, '', url);
+  };
+
+  useEffect(() => {
+    const onPopState = () => {
+      const mode = new URLSearchParams(window.location.search).get('mode');
+      const nextLearnMode = mode === 'learn';
+      setLearnMode(nextLearnMode);
+      setScreen(mode === 'revision' ? 'revision' : 'home');
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
+  useEffect(() => {
+    try {
+      saveSmartRevisionData(localStorage, revisionData);
+    } catch {
+      setStorageError('This browser could not save Smart Revision progress. Keep this tab open and export a backup when possible.');
+    }
+  }, [revisionData]);
+
+  useEffect(() => {
+    try {
+      saveLearnProgress(localStorage, learnProgress);
+      setStorageError('');
+    } catch {
+      setStorageError('This browser could not save Learn & Q&A progress. Keep this tab open to avoid losing progress.');
+    }
+  }, [learnProgress]);
+
+  useEffect(() => {
+    if (!session || session.status !== 'finished' || session.mode !== 'learn' || !session.trackId || !session.stageId || !session.finishedAt) return;
+    const correct = session.prompts.filter((prompt) => prompt.answerResult === 'correct').length;
+    setLearnProgress((current) => recordLearnQuizSummary(current, session.trackId!, session.stageId!, {
+      sessionId: session.id,
+      correct,
+      total: session.prompts.length,
+      finishedAt: session.finishedAt!,
+    }));
+    setLearnResumeTrackId(session.trackId);
+  }, [session]);
 
   useEffect(() => {
     setSession((current) => {
@@ -192,6 +335,59 @@ export default function MobileInterview() {
     return () => window.clearTimeout(timeout);
   }, [copyNotice]);
 
+  useEffect(() => {
+    if (!revisionSetupOpen) return undefined;
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousRootOverflow = document.documentElement.style.overflow;
+    const previousActiveElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    const focusFrame = window.requestAnimationFrame(() => revisionCloseButtonRef.current?.focus());
+    const handleDialogKeyDown = (event: KeyboardEvent) => {
+      const dialog = revisionDialogRef.current;
+      if (!dialog) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setRevisionSetupOpen(false);
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusable = [...dialog.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), input:not([disabled]), summary, [tabindex]:not([tabindex="-1"])',
+      )].filter((element) => element.getClientRects().length > 0 && getComputedStyle(element).visibility !== 'hidden');
+      if (focusable.length === 0) {
+        event.preventDefault();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (!dialog.contains(document.activeElement)) {
+        event.preventDefault();
+        first.focus();
+      } else if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', handleDialogKeyDown);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.removeEventListener('keydown', handleDialogKeyDown);
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousRootOverflow;
+      if (previousActiveElement?.isConnected) previousActiveElement.focus({ preventScroll: true });
+    };
+  }, [revisionSetupOpen]);
+
+  useEffect(() => {
+    if (screen !== 'revision') return undefined;
+    const timer = window.setInterval(() => setClockNow(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, [screen]);
+
   const currentPrompt = session?.prompts[session.activeIndex];
   const recordQuestionStat = useCallback((
     sessionId: string,
@@ -206,6 +402,36 @@ export default function MobileInterview() {
       setStorageError(`This browser could not save ${description}.`);
     }
   }, []);
+  const recordRevisionAssessment = useCallback((sessionId: string, promptId: string, result: RevisionResult) => {
+    if (result === 'unavailable') return;
+    setRevisionData((current) => {
+      let updated = applyRevisionAssessment(current, promptId, sessionId, result, Date.now());
+      if (result === 'incorrect') {
+        const stats = loadMobileInterviewQuestionStats(localStorage);
+        updated = autoPromoteQuestion(updated, promptId, stats[promptId]?.wrong ?? 0, Date.now());
+      }
+      try {
+        saveSmartRevisionData(localStorage, updated);
+        setStorageError('');
+      } catch {
+        setStorageError('This browser could not save Smart Revision progress. Keep this tab open and export a backup when possible.');
+      }
+      return updated;
+    });
+  }, []);
+
+  const changeRevisionPriority = useCallback((questionId: string, priority: RevisionPriority) => {
+    setRevisionData((current) => {
+      const updated = setRevisionPriority(current, questionId, priority, Date.now());
+      try {
+        saveSmartRevisionData(localStorage, updated);
+        setStorageError('');
+      } catch {
+        setStorageError('This browser could not save Smart Revision priorities.');
+      }
+      return updated;
+    });
+  }, []);
 
   const sourceQuestion = currentPrompt
     ? interviewQuestions.find((question) => question.prompt === currentPrompt.text
@@ -216,6 +442,20 @@ export default function MobileInterview() {
   const importantCount = session?.prompts.filter((prompt) => prompt.important).length ?? 0;
   const revealedCount = session?.prompts.filter((prompt) => prompt.referenceRevealed).length ?? 0;
   const progressSessions = session && !history.some((entry) => entry.id === session.id) ? [session, ...history] : history;
+  const latestLearnResultsByTrack = progressSessions
+    .filter((entry) => entry.mode === 'learn' && entry.trackId)
+    .slice()
+    .sort((first, second) => (second.finishedAt ?? second.startedAt) - (first.finishedAt ?? first.startedAt))
+    .reduce<Record<string, Record<string, 'correct' | 'incorrect' | 'skipped'>>>((byTrack, entry) => {
+      const results = byTrack[entry.trackId!] ?? {};
+      entry.prompts.forEach((prompt) => {
+        if (results[prompt.id]) return;
+        if (prompt.answerResult === 'correct' || prompt.answerResult === 'incorrect') results[prompt.id] = prompt.answerResult;
+        else if (prompt.skipped) results[prompt.id] = 'skipped';
+      });
+      byTrack[entry.trackId!] = results;
+      return byTrack;
+    }, {});
   const completedQuestionCount = progressSessions.reduce((total, entry) => total + entry.prompts.filter((prompt) => prompt.answered).length, 0);
   const revealedAnswerCount = progressSessions.reduce((total, entry) => total + entry.prompts.filter((prompt) => prompt.referenceRevealed).length, 0);
   const skippedQuestionCount = progressSessions.reduce((total, entry) => total + entry.prompts.filter((prompt) => prompt.skipped).length, 0);
@@ -258,8 +498,128 @@ export default function MobileInterview() {
       setIds,
       questionTimeLimitSeconds: timeLimit,
       programQuestionTimeLimitSeconds: programTimeLimit,
+      mode: 'interview',
       ...(schedule ? { scheduleId: schedule.id } : {}),
     }));
+    setImportantOnly(false);
+    setFeedback(null);
+    setScreen('session');
+  };
+
+  const openRevisionSetup = () => {
+    setRevisionSetIds(questionSets.map((set) => set.id));
+    setRevisionSectionIds(questionSets.flatMap((set) => set.sections.map((section) => section.id)));
+    setRevisionSessionSize(revisionData.settings.sessionSize);
+    setRevisionNotice('');
+    setRevisionSetupOpen(true);
+  };
+
+  const beginRevisionSession = (mustKnowOnly = false, everything = false) => {
+    if (session && session.status !== 'finished'
+      && !window.confirm('Starting Smart Revision will replace the saved session in progress. Continue?')) return;
+    const setIds = everything ? questionSets.map((set) => set.id) : revisionSetIds.length ? revisionSetIds : revisionSetupOpen ? [] : questionSets.map((set) => set.id);
+    const sectionIds = everything ? questionSets.flatMap((set) => set.sections.map((section) => section.id)) : revisionSectionIds.length ? revisionSectionIds : revisionSetupOpen ? [] : questionSets
+      .filter((set) => setIds.includes(set.id))
+      .flatMap((set) => set.sections.map((section) => section.id));
+    const scopedQuestions = questionBank.filter((question) => setIds.includes(question.setId) && sectionIds.includes(question.sectionId));
+    const inputs = scopedQuestions.map((question) => ({
+      id: question.id,
+      sectionId: question.sectionId,
+      stats: questionStats[question.id],
+    }));
+    const selection = buildRevisionSelection(revisionData, inputs, {
+      now: Date.now(),
+      random: Math.random,
+      sessionSize: revisionSessionSize,
+      mustKnowOnly,
+    });
+    if (selection.picks.length === 0) {
+      setRevisionNotice(mustKnowOnly ? 'No must-know questions are available in this scope yet.' : 'No questions are available in this scope.');
+      return;
+    }
+    const prompts = selection.picks.flatMap((pick) => {
+      const question = scopedQuestions.find((item) => item.id === pick.questionId);
+      return question ? [{ ...toMobilePrompt(question), pickReason: pick.reason }] : [];
+    });
+    const selectedSetsForSession = questionSets.filter((set) => setIds.includes(set.id));
+    setRevisionData(selection.data);
+    setRevisionNotice('');
+    setRevisionSetupOpen(false);
+    setSession(createMobileInterviewSession(
+      prompts,
+      selectedSetsForSession.length > 1 ? 'mixed' : inferTrack(selectedSetsForSession[0]?.title),
+      0,
+      Date.now(),
+      {
+        title: mustKnowOnly ? 'Smart Revision · Must-know' : 'Smart Revision',
+        setIds,
+        questionTimeLimitSeconds: questionTimeLimitSeconds || 120,
+        programQuestionTimeLimitSeconds: programQuestionTimeLimitSeconds || 900,
+        mode: 'revision',
+      },
+    ));
+    setImportantOnly(false);
+    setFeedback(null);
+    setScreen('session');
+  };
+
+  const changeRevisionSlots = (key: 'due' | 'weak' | 'new', delta: number) => {
+    setRevisionData((current) => {
+      const slots = { ...current.settings.slots };
+      const next = slots[key] + delta;
+      if (next < 0 || next > 100) return current;
+      let remaining = delta;
+      const otherKeys = (['due', 'weak', 'new'] as const).filter((entry) => entry !== key);
+      for (const other of otherKeys) {
+        if (remaining > 0) {
+          const change = Math.min(remaining, slots[other]);
+          slots[other] -= change;
+          remaining -= change;
+        } else if (remaining < 0) {
+          const change = Math.min(-remaining, 100 - slots[other]);
+          slots[other] += change;
+          remaining += change;
+        }
+      }
+      if (remaining !== 0) return current;
+      slots[key] = next;
+      const updated = { ...current, settings: { ...current.settings, slots }, modifiedAt: Date.now() };
+      try {
+        saveSmartRevisionData(localStorage, updated);
+        setStorageError('');
+      } catch {
+        setStorageError('This browser could not save Smart Revision settings.');
+      }
+      return updated;
+    });
+  };
+
+  const beginLearnQuiz = (
+    track: LearnTrackProgress,
+    stage: LearnStage,
+    prompts: MobileInterviewPrompt[],
+    options: { questionTimeSeconds: number; programTimeSeconds: number },
+  ) => {
+    if (session && session.status !== 'finished'
+      && !window.confirm('Starting a Learn quiz will replace the saved interview in progress. Continue?')) return;
+    const sets = questionSets.filter((set) => track.setIds.includes(set.id));
+    setSession(createMobileInterviewSession(
+      prompts,
+      sets.length > 1 ? 'mixed' : inferTrack(sets[0]?.title),
+      0,
+      Date.now(),
+      {
+        title: `Learn · ${stage.mistakes ? 'Mistakes' : `Stage ${stage.ordinal}`}`,
+        setIds: track.setIds,
+        questionTimeLimitSeconds: options.questionTimeSeconds,
+        programQuestionTimeLimitSeconds: options.programTimeSeconds,
+        mode: 'learn',
+        stageId: stage.id,
+        trackId: track.id,
+      },
+    ));
+    setLearnResumeTrackId(track.id);
+    setLearnResumeStageId('');
     setImportantOnly(false);
     setFeedback(null);
     setScreen('session');
@@ -275,6 +635,18 @@ export default function MobileInterview() {
   const submitAnswer = () => {
     if (!session || !currentPrompt || session.status !== 'running') return;
     const now = Date.now();
+    const pausePromptAsSkipped = (remainingSeconds: number) => {
+      recordQuestionStat(session.id, currentPrompt.id, recordMobileInterviewQuestionSkipped, 'skipped-question statistics');
+      recordRevisionAssessment(session.id, currentPrompt.id, 'skipped');
+      const skippedSession = {
+        ...session,
+        remainingSeconds,
+        prompts: session.prompts.map((prompt, index) => index === session.activeIndex
+          ? { ...prompt, answered: false, skipped: true, remainingSeconds }
+          : prompt),
+      };
+      setSession(pauseMobileInterviewSession(skippedSession, now));
+    };
     if (currentPrompt.kind === 'coding') {
       const remainingSeconds = session.untimed
         ? currentPrompt.remainingSeconds
@@ -286,7 +658,13 @@ export default function MobileInterview() {
       }
       const code = currentPrompt.codingAnswers?.[currentPrompt.codingLanguage ?? 'kotlin'] ?? '';
       if (!code.trim()) {
+        if (session.mode === 'learn') {
+          pausePromptAsSkipped(remainingSeconds);
+          setFeedback(null);
+          return;
+        }
         recordQuestionStat(session.id, currentPrompt.id, recordMobileInterviewQuestionSkipped, 'skipped-question statistics');
+        recordRevisionAssessment(session.id, currentPrompt.id, 'skipped');
         setSession({
           ...session,
           status: 'paused',
@@ -323,6 +701,20 @@ export default function MobileInterview() {
       setFeedback(null);
       return;
     }
+    const submittedAnswer = currentPrompt.answerText ?? currentPrompt.note;
+    if ((session.mode === 'learn' || session.mode === 'revision') && currentPrompt.kind !== 'mcq' && !submittedAnswer.trim()) {
+      const remainingSeconds = session.untimed
+        ? currentPrompt.remainingSeconds
+        : getMobileInterviewRemainingSeconds(session, now);
+      pausePromptAsSkipped(remainingSeconds);
+      setFeedback({
+        promptId: currentPrompt.id,
+        result: 'skipped',
+        reveal: false,
+        answerViewed: true,
+      });
+      return;
+    }
     const result: 'correct' | 'incorrect' | 'submitted' = currentPrompt.kind === 'mcq'
       ? currentPrompt.selectedOptionId === currentPrompt.correctOptionId ? 'correct' : 'incorrect'
       : 'submitted';
@@ -334,6 +726,7 @@ export default function MobileInterview() {
         (storage, sessionId, promptId) => recordMobileInterviewQuestionAnswerResult(storage, sessionId, promptId, result),
         'answer-result statistics',
       );
+      recordRevisionAssessment(session.id, currentPrompt.id, result === 'correct' ? 'correct' : 'incorrect');
     }
     const answeredSession = {
       ...session,
@@ -346,7 +739,7 @@ export default function MobileInterview() {
       promptId: currentPrompt.id,
       result,
       reveal: false,
-      answerViewed: false,
+      answerViewed: (session.mode === 'learn' || session.mode === 'revision') && result === 'submitted',
     });
   };
 
@@ -359,8 +752,9 @@ export default function MobileInterview() {
       (storage, sessionId, promptId) => recordMobileInterviewQuestionAnswerResult(storage, sessionId, promptId, result),
       'answer-result statistics',
     );
+    recordRevisionAssessment(session.id, feedback.promptId, result === 'correct' ? 'correct' : 'incorrect');
     setFeedback((current) => current?.promptId === feedback.promptId
-      ? { ...current, result, reveal: true, answerViewed: true }
+      ? { ...current, result, reveal: session.mode !== 'learn', answerViewed: true }
       : current);
   };
 
@@ -374,7 +768,13 @@ export default function MobileInterview() {
   }, []);
 
   const continueAfterFeedback = () => {
-    if (feedback) advanceAfterFeedback(feedback.promptId);
+    if (!feedback) return;
+    if (session?.mode === 'revision' && feedback.result === 'submitted') {
+      recordQuestionStat(session.id, feedback.promptId, recordMobileInterviewQuestionSkipped, 'skipped-question statistics');
+      recordRevisionAssessment(session.id, feedback.promptId, 'skipped');
+      updatePrompt(feedback.promptId, { answered: false, skipped: true, answerResult: undefined });
+    }
+    advanceAfterFeedback(feedback.promptId);
   };
 
   const hideCodingAnswer = () => {
@@ -416,9 +816,10 @@ export default function MobileInterview() {
         (storage, sessionId, promptId) => recordMobileInterviewQuestionAnswerResult(storage, sessionId, promptId, result),
         'answer-result statistics',
       );
+      recordRevisionAssessment(session.id, currentPrompt.id, result === 'correct' ? 'correct' : 'incorrect');
     }
     updatePrompt(currentPrompt.id, { answered: true, skipped: false, answerResult: result });
-  }, [currentPrompt, recordQuestionStat, session, updatePrompt]);
+  }, [currentPrompt, recordQuestionStat, recordRevisionAssessment, session, updatePrompt]);
 
   const retryCodingPromptWithExtraTime = useCallback(() => {
     setFeedback(null);
@@ -436,6 +837,7 @@ export default function MobileInterview() {
     let movingSession = session;
     if (index > session.activeIndex && currentPrompt && !currentPrompt.answered && !currentPrompt.skipped) {
       recordQuestionStat(session.id, currentPrompt.id, recordMobileInterviewQuestionSkipped, 'skipped-question statistics');
+      recordRevisionAssessment(session.id, currentPrompt.id, 'skipped');
       movingSession = {
         ...session,
         prompts: session.prompts.map((prompt, promptIndex) => promptIndex === session.activeIndex
@@ -455,7 +857,8 @@ export default function MobileInterview() {
   };
 
   const exitSession = () => {
-    if (session?.status === 'running' && !window.confirm('Pause this interview and return to the Mobile Interview landing page?')) return;
+    const flowName = session?.mode === 'revision' ? 'revision' : 'interview';
+    if (session?.status === 'running' && !window.confirm(`Pause this ${flowName} and return to the Mobile Interview landing page?`)) return;
     if (session?.status === 'running') {
       const paused = pauseMobileInterviewSession(session);
       try {
@@ -467,15 +870,18 @@ export default function MobileInterview() {
       setSession(paused);
     }
     setFeedback(null);
-    setScreen('home');
+    if (session?.mode === 'learn') setLearnResumeTrackId('');
+    setScreen(session?.mode === 'revision' ? 'revision' : 'home');
   };
 
   const abortSession = () => {
-    if (!session || !window.confirm('Abort this interview? Your current answers and this attempt will be discarded, and it will not appear in History.')) return;
+    const flowName = session?.mode === 'revision' ? 'revision' : 'interview';
+    if (!session || !window.confirm(`Abort this ${flowName}? Your current answers and this attempt will be discarded, and it will not appear in History.`)) return;
     setSession(null);
+    if (session.mode === 'learn') setLearnResumeTrackId('');
     setFeedback(null);
     setImportantOnly(false);
-    setScreen('home');
+    setScreen(session.mode === 'revision' ? 'revision' : 'home');
   };
 
   const discardSession = () => {
@@ -483,18 +889,35 @@ export default function MobileInterview() {
     setSession(null);
     setFeedback(null);
     setImportantOnly(false);
-    setScreen('practice');
+    setScreen(session?.mode === 'revision' ? 'revision' : 'practice');
   };
 
   const finishSessionEarly = () => {
-    if (!session || !window.confirm('End this interview now and open the recap?')) return;
-    setSession(finishMobileInterviewSession(session));
+    const flowName = session?.mode === 'revision' ? 'revision' : 'interview';
+    if (!session || !window.confirm(`End this ${flowName} now and open the recap?`)) return;
+    let sessionToFinish = session;
+    const prompt = session.prompts[session.activeIndex];
+    if (session.mode === 'revision' && prompt && !prompt.skipped && !prompt.answerResult) {
+      recordQuestionStat(session.id, prompt.id, recordMobileInterviewQuestionSkipped, 'skipped-question statistics');
+      recordRevisionAssessment(session.id, prompt.id, 'skipped');
+      sessionToFinish = {
+        ...session,
+        prompts: session.prompts.map((entry, index) => index === session.activeIndex
+          ? { ...entry, answered: false, skipped: true }
+          : entry),
+      };
+    }
+    setSession(finishMobileInterviewSession(sessionToFinish));
     setScreen('recap');
   };
 
   const returnToHome = () => {
+    const finishedLearnTrackId = session?.mode === 'learn' ? session.trackId : undefined;
+    const finishedMode = session?.mode;
     if (session?.status === 'finished') setSession(null);
-    setScreen('home');
+    if (finishedLearnTrackId) setLearnResumeTrackId(finishedLearnTrackId);
+    setLearnResumeStageId('');
+    setScreen(finishedMode === 'revision' ? 'revision' : 'home');
   };
 
   const removeSchedule = (scheduleId: string) => {
@@ -583,6 +1006,10 @@ export default function MobileInterview() {
   };
 
   const allHistory = progressSessions;
+  const visibleHistory = allHistory.filter((entry) => historyFilter === 'all'
+    || (historyFilter === 'revision'
+      ? entry.mode === 'revision'
+      : historyFilter === 'learn' ? entry.mode === 'learn' : entry.mode !== 'learn' && entry.mode !== 'revision'));
   const toggleCategory = (categoryId: string, checked: boolean) => {
     const nextCategoryIds = checked
       ? [...new Set([...selectedSetIds, categoryId])]
@@ -691,12 +1118,203 @@ export default function MobileInterview() {
     );
   };
 
+  if (learnMode && screen !== 'session' && !(session?.status === 'finished' && screen === 'recap')) {
+    return <LearnQA
+      questionBank={questionBank}
+      questionSets={questionSets}
+      questionStats={questionStats}
+      revisionData={revisionData}
+      onRevisionPriorityChange={changeRevisionPriority}
+      latestResultsByTrack={latestLearnResultsByTrack}
+      progress={learnProgress}
+      onProgressChange={setLearnProgress}
+      initialTrackId={learnResumeTrackId}
+      initialStageId={learnResumeStageId}
+      interviewToResume={session && session.status !== 'finished' ? session : null}
+      onResumeInterview={() => {
+        if (session?.status === 'paused') setSession(resumeMobileInterviewSession(session));
+        setScreen('session');
+      }}
+      onAbortInterview={abortSession}
+      onStartQuiz={(track, stage, prompts, options) => beginLearnQuiz(track, stage, prompts, options)}
+      onBackToInterview={() => {
+        updateLearnMode(false);
+        setLearnResumeTrackId('');
+        setLearnResumeStageId('');
+        setScreen('home');
+      }}
+      storageError={storageError}
+    />;
+  }
+
+  if (screen === 'revision') {
+    const revisionSets = questionSets.filter((set) => revisionSetIds.includes(set.id));
+    const scopedSections = revisionSets.flatMap((set) => set.sections.filter((section) => revisionSectionIds.includes(section.id)));
+    const setupCoverage = getRevisionSummary(revisionSetupInputs, revisionData, clockNow).coverage;
+    const interviewDateText = revisionData.interviewDate === null ? '' : toLocalDateInput(revisionData.interviewDate);
+    const setInterviewDate = (date: string) => {
+      setRevisionData((current) => {
+        const updated = { ...current, interviewDate: date ? new Date(`${date}T00:00:00`).getTime() : null, modifiedAt: Date.now() };
+        try {
+          saveSmartRevisionData(localStorage, updated);
+          setStorageError('');
+        } catch {
+          setStorageError('This browser could not save the Smart Revision interview date.');
+        }
+        return updated;
+      });
+    };
+    const toggleRevisionSet = (setId: string, checked: boolean) => {
+      const nextSets = checked ? [...new Set([...revisionSetIds, setId])] : revisionSetIds.filter((id) => id !== setId);
+      setRevisionSetIds(nextSets);
+      const allSections = questionSets.filter((set) => nextSets.includes(set.id)).flatMap((set) => set.sections.map((section) => section.id));
+      const newSections = questionSets.find((set) => set.id === setId)?.sections.map((section) => section.id) ?? [];
+      setRevisionSectionIds((current) => checked
+        ? [...new Set([...current, ...newSections])]
+        : current.filter((id) => allSections.includes(id)));
+    };
+    const toggleRevisionSection = (sectionId: string, checked: boolean) => {
+      const nextSections = checked ? [...new Set([...revisionSectionIds, sectionId])] : revisionSectionIds.filter((id) => id !== sectionId);
+      setRevisionSectionIds(nextSections);
+      const owningSets = questionSets.filter((set) => set.sections.some((section) => nextSections.includes(section.id))).map((set) => set.id);
+      setRevisionSetIds(owningSets);
+    };
+    return (
+      <section className="mobile-interview mobile-revision">
+        <header className="mobile-interview-top mobile-interview-page-heading">
+          <button className="mobile-interview-back mobile-interview-recap-back" type="button" onClick={() => updateRevisionMode(false)} aria-label="Back to Mobile Interview home">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5m7 7-7-7 7-7" /></svg>
+          </button>
+          <div><span className="mobile-interview-kicker">Spaced practice</span><h2>Smart Revision</h2></div>
+        </header>
+        {session && session.status !== 'finished' && (
+          <section className="mobile-interview-resume-card mobile-revision-resume">
+            <div><span className="mobile-interview-kicker">{session.status === 'paused' ? 'Revision paused' : 'Revision in progress'}</span>
+              <h3>{session.title ?? 'Smart Revision'}</h3>
+              <p>Question {session.activeIndex + 1} of {session.prompts.length}</p>
+            </div>
+            <button type="button" className="primary-button" onClick={() => {
+              if (session.status === 'paused') setSession(resumeMobileInterviewSession(session));
+              setScreen('session');
+            }}>Continue revision</button>
+          </section>
+        )}
+        <section className="mobile-revision-summary">
+          <div className="mobile-revision-cycle"><strong>Cycle {revisionData.currentCycle}</strong><span>{revisionSummary.coverage}% covered</span></div>
+          <div className="mobile-revision-metrics">
+            <div><strong>{revisionSummary.dueNow}</strong><span>Due now</span></div>
+            <div><strong>{revisionSummary.dueThisWeek}</strong><span>Due this week</span></div>
+            <div><strong>{revisionSummary.weak}</strong><span>Weak</span></div>
+            <div><strong>{revisionSummary.mustKnow}</strong><span>Must-know</span></div>
+          </div>
+          {revisionSummary.dueNow === 0 && <p className="mobile-revision-countdown">Nothing due right now — session time will focus on coverage.</p>}
+          {revisionCountdownDays !== null && <p className="mobile-revision-countdown">{revisionCountdownDays < 0 ? 'Interview date has passed' : revisionCountdownDays === 0 ? 'Interview today' : `${revisionCountdownDays} days left until your interview`}</p>}
+        </section>
+        <div className="mobile-revision-actions">
+          <button type="button" className="primary-button mobile-interview-primary" onClick={openRevisionSetup}>Start revision</button>
+          <button type="button" className="secondary-button" onClick={() => {
+            beginRevisionSession(true, true);
+          }}>Must-know only</button>
+        </div>
+        <section className="mobile-revision-progress">
+          <header><h3>Memory levels</h3><span>{questionBank.length} questions</span></header>
+          {revisionSummary.boxes.map((count, index) => (
+            <div className="mobile-revision-box-row" key={index}>
+              <span>Box {index + 1} · {SMART_REVISION_CONFIG.boxGapDays[index]}d</span><div role="progressbar" aria-label={`Box ${index + 1}, ${SMART_REVISION_CONFIG.boxGapDays[index]} day interval`} aria-valuenow={count} aria-valuemin={0} aria-valuemax={questionBank.length}><i style={{ width: `${questionBank.length ? count / questionBank.length * 100 : 0}%` }} /></div><strong>{count}</strong>
+            </div>
+          ))}
+        </section>
+        {revisionNotice && <p className="mobile-interview-empty" role="status">{revisionNotice}</p>}
+        {storageError && <p className="mobile-interview-storage-error" role="alert">{storageError}</p>}
+        {revisionSetupOpen && (
+          <div className="mobile-interview-history-overlay mobile-revision-overlay" onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setRevisionSetupOpen(false);
+          }}>
+            <section ref={revisionDialogRef} className="mobile-revision-sheet" role="dialog" aria-modal="true" aria-labelledby="mobile-revision-setup-title">
+              <header><div><span className="mobile-interview-kicker">Build your session</span><h2 id="mobile-revision-setup-title">Revision setup</h2></div>
+                <button ref={revisionCloseButtonRef} type="button" className="mobile-interview-back" aria-label="Close revision setup" onClick={() => setRevisionSetupOpen(false)}>×</button></header>
+              <div className="mobile-revision-form">
+                <div className="mobile-revision-scope">
+                  <h3>Scope · Cycle {revisionData.currentCycle} · {setupCoverage}% covered</h3>
+                  <p className="mobile-revision-scope-count" aria-live="polite">{revisionSetupInputs.length} questions selected</p>
+                  <div className="mobile-revision-selection-actions">
+                    <button type="button" className="secondary-button" onClick={() => {
+                      setRevisionSetIds(questionSets.map((set) => set.id));
+                      setRevisionSectionIds(questionSets.flatMap((set) => set.sections.map((section) => section.id)));
+                    }}>Everything</button>
+                    <button type="button" className="mobile-interview-text-button" onClick={() => { setRevisionSetIds([]); setRevisionSectionIds([]); }}>Clear</button>
+                  </div>
+                  {questionSets.map((set) => (
+                    <details key={set.id} className="mobile-revision-scope-set">
+                      <summary><label><input
+                        type="checkbox"
+                        checked={set.sections.length > 0 && set.sections.every((section) => revisionSectionIds.includes(section.id))}
+                        aria-checked={set.sections.some((section) => revisionSectionIds.includes(section.id))
+                          ? set.sections.every((section) => revisionSectionIds.includes(section.id)) ? true : 'mixed'
+                          : false}
+                        ref={(element) => {
+                          if (element) {
+                            const selectedCount = set.sections.filter((section) => revisionSectionIds.includes(section.id)).length;
+                            element.indeterminate = selectedCount > 0 && selectedCount < set.sections.length;
+                          }
+                        }}
+                        onChange={(event) => toggleRevisionSet(set.id, event.target.checked)}
+                      /><span>{set.title}</span></label></summary>
+                      <div>{set.sections.map((section) => <label key={section.id}>
+                        <input type="checkbox" checked={revisionSectionIds.includes(section.id)} onChange={(event) => toggleRevisionSection(section.id, event.target.checked)} />
+                        <span>{section.title}</span><small>{section.questionCount}</small>
+                      </label>)}</div>
+                    </details>
+                  ))}
+                  {scopedSections.length === 0 && <p className="mobile-interview-empty">Select one or more question sections.</p>}
+                </div>
+                <fieldset className="mobile-revision-size">
+                  <legend>Questions per session</legend>
+                  <div>{SMART_REVISION_CONFIG.allowedSessionSizes.map((size) => <button key={size} type="button" className={revisionSessionSize === size ? 'active' : ''} aria-pressed={revisionSessionSize === size} onClick={() => {
+                    setRevisionSessionSize(size);
+                    setRevisionData((current) => ({ ...current, settings: { ...current.settings, sessionSize: size }, modifiedAt: Date.now() }));
+                  }}>{size}</button>)}</div>
+                </fieldset>
+                <div className="mobile-revision-date">
+                  <label htmlFor="mobile-revision-interview-date">Interview date (optional)</label>
+                  <div><input id="mobile-revision-interview-date" type="date" value={interviewDateText} onChange={(event) => setInterviewDate(event.target.value)} />
+                    {interviewDateText && <button type="button" className="mobile-interview-text-button" onClick={() => setInterviewDate('')}>Clear</button>}</div>
+                  {revisionCountdownDays !== null && <small>{revisionCountdownDays < 0 ? 'Date passed; standard mix is active.' : `${revisionCountdownDays} days left`}</small>}
+                </div>
+                <details className="mobile-revision-advanced" open={revisionAdvancedOpen} onToggle={(event) => setRevisionAdvancedOpen(event.currentTarget.open)}>
+                  <summary>Advanced mix · Due {revisionData.settings.slots.due}% · Weak {revisionData.settings.slots.weak}% · New {revisionData.settings.slots.new}%</summary>
+                  {(['due', 'weak', 'new'] as const).map((key) => <div key={key}>
+                    <span>{key.toUpperCase()}</span><button type="button" aria-label={`Decrease ${key}`} onClick={() => changeRevisionSlots(key, -5)}>−</button><strong>{revisionData.settings.slots[key]}%</strong><button type="button" aria-label={`Increase ${key}`} onClick={() => changeRevisionSlots(key, 5)}>+</button>
+                  </div>)}
+                  <button type="button" className="mobile-interview-text-button" onClick={() => setRevisionData((current) => ({ ...current, settings: { ...current.settings, slots: { ...SMART_REVISION_CONFIG.defaultSlots } }, modifiedAt: Date.now() }))}>Reset to defaults</button>
+                </details>
+              </div>
+              <div className="mobile-revision-footer">
+                <p className="mobile-revision-preview" aria-live="polite">{revisionSetupPreview?.length
+                  ? `Preview · ${revisionSetupPreview.length} questions · ${(['due', 'weak', 'new', 'priority', 'filler'] as const)
+                    .map((reason) => {
+                      const count = revisionSetupPreview.filter((pick) => pick.reason === reason).length;
+                      return count > 0 ? `${count} ${reason === 'filler' ? 'review' : reason}` : '';
+                    })
+                    .filter(Boolean)
+                    .join(' · ')}`
+                  : 'No questions are available in this scope.'}</p>
+                {revisionNotice && <p className="mobile-interview-empty" role="status">{revisionNotice}</p>}
+                <button type="button" className="primary-button mobile-interview-primary" onClick={() => beginRevisionSession()} disabled={revisionSetupInputs.length === 0}>Start revision</button>
+              </div>
+            </section>
+          </div>
+        )}
+      </section>
+    );
+  }
+
   if (screen === 'home') {
     return (
       <section className="mobile-interview mobile-interview-landing">
         {session && session.status !== 'finished' && (
           <section className="mobile-interview-resume-card">
-            <div><span className="mobile-interview-kicker">{session.status === 'paused' ? 'Interview paused' : 'Interview in progress'}</span><h3>{session.title ?? `${trackLabel(session.track)} interview`}</h3>
+            <div><span className="mobile-interview-kicker">{session.mode === 'revision' ? session.status === 'paused' ? 'Revision paused' : 'Revision in progress' : session.status === 'paused' ? 'Interview paused' : 'Interview in progress'}</span><h3>{session.title ?? `${trackLabel(session.track)} interview`}</h3>
               <p>Section {getSessionSections(session).indexOf(session.prompts[session.activeIndex].sectionId) + 1} of {getSessionSections(session).length} · Question {session.activeIndex + 1} of {session.prompts.length}</p>
             </div>
             <div className="mobile-interview-resume-actions">
@@ -708,12 +1326,23 @@ export default function MobileInterview() {
                   setSession(resumeMobileInterviewSession(session));
                 }
                 setScreen('session');
-              }}>Continue last interview</button>
-              <button type="button" className="mobile-interview-abort" onClick={abortSession}>Abort interview</button>
+              }}>{session.mode === 'learn' ? 'Continue Learn quiz' : session.mode === 'revision' ? 'Continue Smart Revision' : 'Continue last interview'}</button>
+              <button type="button" className="mobile-interview-abort" onClick={abortSession}>{session.mode === 'revision' ? 'Abort revision' : 'Abort interview'}</button>
             </div>
           </section>
         )}
         <div className="mobile-interview-home-actions">
+          <button type="button" className="mobile-interview-home-action" onClick={() => {
+            setLearnResumeTrackId('');
+            setLearnResumeStageId('');
+            updateLearnMode(true);
+          }}>
+            <span className="mobile-interview-home-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21z" /><path d="M4 5.5v13A2.5 2.5 0 0 1 6.5 16H20M8 7h8m-8 4h6" /></svg></span><strong>Learn &amp; Q&amp;A</strong>
+          </button>
+          <button type="button" className="mobile-interview-home-action" onClick={() => updateRevisionMode(true)}>
+            <span className="mobile-interview-home-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5" /><path d="M5.5 9A7 7 0 0 1 18 6l2 2M4 16l2 2a7 7 0 0 0 12.5-3" /></svg></span>
+            <strong>Smart Revision{revisionSummary.dueNow > 0 && <small>{revisionSummary.dueNow}</small>}</strong>
+          </button>
           <button type="button" className="mobile-interview-home-action" onClick={() => setScreen('practice')}>
             <span className="mobile-interview-home-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg></span><strong>New interview</strong>
           </button>
@@ -768,13 +1397,14 @@ export default function MobileInterview() {
           <div><strong>{revealedAnswerCount}</strong><span>references viewed</span></div>
           <div><strong>{skippedQuestionCount}</strong><span>questions skipped</span></div>
         </div>
-        {history.length === 0
+        <HistoryModeFilter value={historyFilter} onChange={setHistoryFilter} />
+        {visibleHistory.length === 0
           ? <p className="mobile-interview-empty">Completed interviews will appear here.</p>
-          : <ol className="mobile-interview-history-list">{history.map((entry) => {
+          : <ol className="mobile-interview-history-list">{visibleHistory.map((entry) => {
             const answered = entry.prompts.filter((prompt) => prompt.answered).length;
             const skipped = entry.prompts.filter((prompt) => prompt.skipped).length;
             return <li key={entry.id}><details>
-              <summary><span><strong>{entry.title ?? `${trackLabel(entry.track)} interview`}</strong><small>{formatAppDateTime(new Date(entry.finishedAt ?? entry.startedAt))} · {entry.prompts.length} questions</small></span><b>{answered} answered · {skipped} skipped</b></summary>
+              <summary><span><strong>{entry.mode === 'learn' ? `Learn · ${getLearnStageLabel(entry.stageId)}` : entry.mode === 'revision' ? `Revision · ${entry.title ?? 'Smart Revision'}` : entry.title ?? `${trackLabel(entry.track)} interview`}</strong><small>{formatAppDateTime(new Date(entry.finishedAt ?? entry.startedAt))} · {entry.prompts.length} questions</small></span><b>{answered} answered · {skipped} skipped</b></summary>
               <ol>{entry.prompts.map((prompt) => <li key={prompt.id}><strong>{prompt.text.split('\n')[0]}</strong>
                 <span>{prompt.answerResult === 'correct' ? 'Correct' : prompt.answerResult === 'incorrect' ? 'Review' : prompt.timeExpired ? 'Timed out' : prompt.skipped ? 'Skipped' : prompt.answered ? 'Submitted' : 'Not answered'}</span>
                 {(prompt.answerText || prompt.note) && <p>Your answer: {prompt.answerText || prompt.note}</p>}</li>)}</ol>
@@ -799,15 +1429,16 @@ export default function MobileInterview() {
           <div><strong>{revealedAnswerCount}</strong><span>references viewed</span></div>
           <div><strong>{skippedQuestionCount}</strong><span>questions skipped</span></div>
         </div>
-        {allHistory.length === 0
+        <HistoryModeFilter value={historyFilter} onChange={setHistoryFilter} />
+        {visibleHistory.length === 0
           ? <p className="mobile-interview-empty">Completed interviews will appear here.</p>
-          : <ol className="mobile-interview-history-list">{allHistory.map((entry) => {
+          : <ol className="mobile-interview-history-list">{visibleHistory.map((entry) => {
             const answered = entry.prompts.filter((prompt) => prompt.answered).length;
             const skipped = entry.prompts.filter((prompt) => prompt.skipped).length;
             return (
               <li key={entry.id}>
                 <details>
-                  <summary><span><strong>{entry.title ?? `${trackLabel(entry.track)} interview`}</strong><small>{entry.status !== 'finished' ? 'In progress · ' : ''}{formatAppDateTime(new Date(entry.finishedAt ?? entry.startedAt))} · {entry.prompts.length} questions</small></span><b>{answered} answered · {skipped} skipped</b></summary>
+                  <summary><span><strong>{entry.mode === 'learn' ? `Learn · ${getLearnStageLabel(entry.stageId)}` : entry.mode === 'revision' ? `Revision · ${entry.title ?? 'Smart Revision'}` : entry.title ?? `${trackLabel(entry.track)} interview`}</strong><small>{entry.status !== 'finished' ? 'In progress · ' : ''}{formatAppDateTime(new Date(entry.finishedAt ?? entry.startedAt))} · {entry.prompts.length} questions</small></span><b>{answered} answered · {skipped} skipped</b></summary>
                   <ol>{entry.prompts.map((prompt) => (
                     <li key={prompt.id}>
                       <strong>{prompt.text.split('\n')[0]}</strong>
@@ -826,20 +1457,63 @@ export default function MobileInterview() {
 
   if (session?.status === 'finished' && screen === 'recap') {
     const prompts = importantOnly ? session.prompts.filter((prompt) => prompt.important) : session.prompts;
+    const revisionChanges = session.mode === 'revision' ? session.prompts.map((prompt) => {
+      const event = revisionData.assessmentEvents[JSON.stringify([session.id, prompt.id])];
+      const current = revisionData.questions[prompt.id];
+      return event && current ? { prompt, before: event.before, current } : undefined;
+    }).filter((change): change is NonNullable<typeof change> => Boolean(change)) : [];
+    const boxesMovedUp = revisionChanges.filter(({ before, current }) => current.box > before.box).length;
+    const boxesMovedDown = revisionChanges.filter(({ before, current }) => current.box < before.box).length;
+    const promotedToMustKnow = revisionChanges.filter(({ before, current }) => before.priority < 2 && current.priority === 2).length;
+    const isBlankLearnAnswer = (prompt: MobileInterviewPrompt) => session.mode === 'learn'
+      && prompt.kind !== 'mcq'
+      && prompt.kind !== 'coding'
+      && prompt.answered
+      && !prompt.answerResult
+      && !(prompt.answerText ?? prompt.note).trim();
+    const learnAnsweredCount = session.mode === 'learn'
+      ? session.prompts.filter((prompt) => prompt.answered && !prompt.skipped && !isBlankLearnAnswer(prompt)).length
+      : answeredCount;
+    const learnSkippedCount = session.mode === 'learn'
+      ? session.prompts.filter((prompt) => prompt.skipped || isBlankLearnAnswer(prompt)).length
+      : skippedCount;
+    const learnTrack = session.mode === 'learn'
+      ? learnProgress.tracks.find((track) => track.id === session.trackId)
+      : undefined;
+    const learnStages = learnTrack
+      ? getLearnStages(learnTrack, questionBank.filter((question) => learnTrack.setIds.includes(question.setId)
+        && learnTrack.sectionIds.includes(question.sectionId)).map((question) => question.id))
+      : [];
+    const currentLearnStageIndex = learnStages.findIndex((stage) => stage.id === session.stageId);
+    const nextLearnStage = currentLearnStageIndex >= 0 ? learnStages[currentLearnStageIndex + 1] : undefined;
+    const continueToNextLearnStage = () => {
+      if (!session.trackId || !nextLearnStage) {
+        returnToHome();
+        return;
+      }
+      setLearnResumeTrackId(session.trackId);
+      setLearnResumeStageId(nextLearnStage.id);
+      setSession(null);
+      setFeedback(null);
+      setImportantOnly(false);
+      setScreen('home');
+    };
     return (
-      <section className="mobile-interview mobile-interview-recap">
+      <section className={`mobile-interview mobile-interview-recap${session.mode === 'learn' ? ' mobile-interview-learn-recap' : ''}`}>
         <header className="mobile-interview-top">
-          <button className="mobile-interview-back" type="button" onClick={returnToHome} aria-label="Return to Mobile Interview home">‹</button>
-          <div><span className="mobile-interview-kicker">Interview complete</span><h2>{session.title ?? `${trackLabel(session.track)} interview`}</h2></div>
-          <button className="mobile-interview-text-button" type="button" onClick={() => setShowHistory(true)}>History</button>
+          <button className="mobile-interview-back mobile-interview-recap-back" type="button" onClick={returnToHome} aria-label={session.mode === 'learn' ? 'Back to Learn stages' : session.mode === 'revision' ? 'Back to Smart Revision' : 'Return to Mobile Interview home'}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5m7 7-7-7 7-7" /></svg>
+          </button>
+          <div><span className="mobile-interview-kicker">{session.mode === 'learn' ? 'Learn quiz complete' : session.mode === 'revision' ? 'Revision complete' : 'Interview complete'}</span><h2>{session.mode === 'learn' ? 'Quiz recap' : session.mode === 'revision' ? 'Revision recap' : session.title ?? `${trackLabel(session.track)} interview`}</h2></div>
+          {session.mode !== 'learn' && <button className="mobile-interview-text-button" type="button" onClick={() => setShowHistory(true)}>History</button>}
         </header>
         <section className="mobile-interview-recap-card">
           <p className="mobile-interview-kicker">{session.finishedAt ? formatAppDateTime(new Date(session.finishedAt)) : 'Completed'}</p>
-          <h3>Interview recap</h3>
+          <h3>{session.mode === 'learn' ? `${getLearnStageLabel(session.stageId)} recap` : session.mode === 'revision' ? 'Revision recap' : 'Interview recap'}</h3>
           <div className="mobile-interview-stats">
-            <div><strong>{getSessionSections(session).length}</strong><span>sections</span></div>
-            <div><strong>{answeredCount}</strong><span>answered</span></div>
-            <div><strong>{skippedCount}</strong><span>skipped</span></div>
+            <div><strong>{session.mode === 'learn' ? 1 : getSessionSections(session).length}</strong><span>{session.mode === 'learn' ? 'stage' : 'sections'}</span></div>
+            <div><strong>{learnAnsweredCount}</strong><span>answered</span></div>
+            <div><strong>{learnSkippedCount}</strong><span>skipped</span></div>
             <div><strong>{revealedCount}</strong><span>references</span></div>
           </div>
           <p>{session.prompts.length} questions · {importantCount} marked important</p>
@@ -849,8 +1523,18 @@ export default function MobileInterview() {
           </div>
           <p className="mobile-interview-qa-notice" role="status" aria-live="polite">{copyNotice}</p>
         </section>
+        {session.mode === 'revision' && <section className="mobile-revision-recap">
+          <h3>Revision progress</h3>
+          <p>{boxesMovedUp} memory level{boxesMovedUp === 1 ? '' : 's'} moved up · {boxesMovedDown} moved down · {promotedToMustKnow} promoted to must-know</p>
+          {revisionChanges.filter(({ current }) => current.dueAt !== null).slice(0, 3).map(({ prompt, current }) => (
+            <small key={prompt.id}>{prompt.sectionTitle}: next due {formatAppDate(new Date(current.dueAt!))}</small>
+          ))}
+        </section>}
+        {session.mode === 'learn' && <button type="button" className="mobile-learn-next-stage" onClick={continueToNextLearnStage}>
+          <span>{nextLearnStage ? `Continue to Stage ${nextLearnStage.ordinal}` : 'Back to stages'}</span><b aria-hidden="true">→</b>
+        </button>}
         <div className="mobile-interview-recap-heading">
-          <div><span className="mobile-interview-kicker">Review</span><h3>{importantOnly ? 'Important questions' : 'Interview questions'}</h3></div>
+          <div><span className="mobile-interview-kicker">Review</span><h3>{importantOnly ? 'Important questions' : session.mode === 'learn' ? 'Quiz questions' : session.mode === 'revision' ? 'Revision questions' : 'Interview questions'}</h3></div>
           {importantCount > 0 && (
             <button type="button" className="mobile-interview-text-button" onClick={() => setImportantOnly((value) => !value)}>
               {importantOnly ? 'Show all' : 'Important only'}
@@ -862,30 +1546,44 @@ export default function MobileInterview() {
             <li key={prompt.id} className="mobile-interview-recap-item">
               <div className="mobile-interview-recap-item-head">
                 <span>{prompt.sectionTitle}</span>
-                <strong>{prompt.important ? '★ Important' : prompt.skipped ? 'Skipped' : prompt.answered ? 'Answered' : 'Unanswered'}</strong>
+                <strong className={prompt.answerResult === 'incorrect' ? 'is-wrong' : prompt.answerResult === 'correct' ? 'is-correct' : prompt.skipped || isBlankLearnAnswer(prompt) ? 'is-skipped' : ''}>{prompt.answerResult === 'incorrect'
+                  ? 'Wrong'
+                  : prompt.answerResult === 'correct'
+                    ? 'Correct'
+                    : prompt.skipped || isBlankLearnAnswer(prompt)
+                      ? 'Skipped'
+                      : prompt.answered ? 'Answered' : 'Unanswered'}</strong>
               </div>
               <p>{prompt.text}</p>
-              {prompt.answerResult && <strong>{prompt.answerResult === 'correct' ? 'Correct' : 'Incorrect'}</strong>}
-              {!prompt.answerResult && prompt.answered && <strong>Submitted</strong>}
-              {(prompt.answerText || prompt.note) && <blockquote>{prompt.answerText || prompt.note}</blockquote>}
+              {(prompt.answerText || prompt.note) ? <blockquote>{prompt.answerText || prompt.note}</blockquote>
+                : session.mode === 'learn' && (prompt.skipped || isBlankLearnAnswer(prompt)) && <p className="mobile-interview-recap-empty-answer">No answer submitted.</p>}
+              {session.mode === 'learn' && (prompt.answerResult === 'incorrect' || prompt.skipped || isBlankLearnAnswer(prompt))
+                && <div className="mobile-interview-recap-reference"><strong>Reference answer</strong><p>{getReferenceAnswer(prompt)}</p></div>}
               {prompt.referenceRevealed && <small>Reference answer viewed.</small>}
             </li>
           ))}
           {prompts.length === 0 && <li className="mobile-interview-empty">No questions were marked important.</li>}
         </ol>
-        <div className="mobile-interview-recap-actions">
-          <button className="primary-button mobile-interview-primary" type="button" onClick={discardSession}>Start another interview</button>
-          <button className="secondary-button" type="button" onClick={returnToHome}>Mobile Interview home</button>
-        </div>
-        {renderHistoryDialog()}
+        {session.mode !== 'learn' && <div className="mobile-interview-recap-actions">
+          <button className="primary-button mobile-interview-primary" type="button" onClick={discardSession}>{session.mode === 'revision' ? 'Start another revision' : 'Start another interview'}</button>
+          <button className="secondary-button" type="button" onClick={returnToHome}>{session.mode === 'revision' ? 'Smart Revision' : 'Mobile Interview home'}</button>
+        </div>}
+        {session.mode !== 'learn' && renderHistoryDialog()}
       </section>
     );
   }
 
   if (session && currentPrompt && screen === 'session') {
+    const flowName = session.mode === 'revision' ? 'revision' : 'interview';
     const sectionIds = getSessionSections(session);
     const currentSectionIndex = sectionIds.indexOf(currentPrompt.sectionId);
     const bankQuestion = questionBank.find((question) => question.id === currentPrompt.id);
+    const revisionRecord = getRevisionRecord(revisionData, currentPrompt.id);
+    const toggleImportant = () => {
+      const important = !currentPrompt.important;
+      updatePrompt(currentPrompt.id, { important });
+      if (important && revisionRecord.priority < 1) changeRevisionPriority(currentPrompt.id, 1);
+    };
     const codingActive = currentPrompt.kind === 'coding'
       && (currentPrompt.codingProblemId !== undefined || bankQuestion?.codingQuestion !== undefined);
     const codingPrompt = codingActive && bankQuestion?.codingQuestion
@@ -899,12 +1597,21 @@ export default function MobileInterview() {
     return (
       <section className={`mobile-interview mobile-interview-active${codingActive ? ' mobile-interview-coding-active' : ''}${codingActive && codingKeyboardOpen ? ' coding-keyboard-open' : ''}`}>
         <header className="mobile-interview-top">
-          <button className="mobile-interview-back" type="button" onClick={exitSession} aria-label="Pause and return to Mobile Interview home">‹</button>
+          <button className="mobile-interview-back mobile-interview-recap-back" type="button" onClick={exitSession} aria-label={`Pause and return to ${session.mode === 'revision' ? 'Smart Revision' : 'Mobile Interview home'}`}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5m7 7-7-7 7-7" /></svg>
+          </button>
           <div><span className="mobile-interview-kicker">{session.title ?? `${trackLabel(session.track)} interview`}</span><h2>{currentPrompt.sectionTitle}</h2></div>
-          <button className="mobile-interview-icon-button" type="button" onClick={() => updatePrompt(currentPrompt.id, { important: !currentPrompt.important })} aria-pressed={currentPrompt.important} aria-label={currentPrompt.important ? 'Remove important mark' : 'Mark important'}>
+          <button className="mobile-interview-icon-button" type="button" onClick={toggleImportant} aria-pressed={currentPrompt.important} aria-label={currentPrompt.important ? 'Remove important mark' : 'Mark important'}>
             {currentPrompt.important ? '★' : '☆'}
           </button>
         </header>
+        <div className="mobile-revision-question-control">
+          {session.mode === 'revision' && currentPrompt.pickReason && <span className={`mobile-revision-reason is-${currentPrompt.pickReason}`}>{revisionReasonLabel(currentPrompt.pickReason)}</span>}
+          <button type="button" className="mobile-revision-priority-button" onClick={() => changeRevisionPriority(currentPrompt.id, ((revisionRecord.priority + 1) % 3) as RevisionPriority)}>
+            Priority · {revisionPriorityLabel(revisionRecord.priority)}
+          </button>
+          {revisionRecord.autoPromoted && <small className="mobile-revision-auto-label">Auto-promoted after repeated mistakes</small>}
+        </div>
         <div className="mobile-interview-section-progress">
           <strong>Section {currentSectionIndex + 1} of {sectionIds.length}</strong>
           <span>{currentPrompt.sectionTitle}</span>
@@ -913,7 +1620,7 @@ export default function MobileInterview() {
         <div
           className="mobile-interview-round-progress"
           role="progressbar"
-          aria-label="Interview round progress"
+          aria-label={session.mode === 'revision' ? 'Revision progress' : 'Interview round progress'}
           aria-valuenow={session.activeIndex + 1}
           aria-valuemin={0}
           aria-valuemax={session.prompts.length}
@@ -959,13 +1666,13 @@ export default function MobileInterview() {
                   <span>{currentPrompt.codingVerification.message || 'The answer could not be verified.'}</span>
                 )}
                 <button className="primary-button" type="button" onClick={() => advanceAfterFeedback(currentPrompt.id)}>
-                  Continue interview
+                  Continue {flowName}
                 </button>
               </>
             ) : (
               <>
                 <strong>{feedback ? 'Answer saved' : 'Paused'}</strong>
-                <button className="primary-button" type="button" onClick={resumeSession}>Resume interview</button>
+                <button className="primary-button" type="button" onClick={resumeSession}>Resume {flowName}</button>
               </>
             )}
           </div>
@@ -1039,21 +1746,21 @@ export default function MobileInterview() {
           </article>
         )}
         <footer className="mobile-interview-controls">
-          <div className={`mobile-interview-control-row${codingActive && session.status === 'paused' ? ' is-coding-paused' : ''}`} role="group" aria-label="Interview controls">
+          <div className={`mobile-interview-control-row${codingActive && session.status === 'paused' ? ' is-coding-paused' : ''}`} role="group" aria-label={session.mode === 'revision' ? 'Revision controls' : 'Interview controls'}>
             <button className="secondary-button" type="button" aria-label="Previous question" title="Previous question" disabled={session.activeIndex === 0 || session.status === 'paused'} onClick={() => moveTo(session.activeIndex - 1)}>
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14.5 5-7 7 7 7" /></svg>
             </button>
             {!(codingActive && session.status === 'paused') && (
-              <button className="secondary-button" type="button" aria-label={session.status === 'running' ? 'Pause interview' : 'Resume interview'} title={session.status === 'running' ? 'Pause interview' : 'Resume interview'} onClick={session.status === 'running' ? pauseSession : resumeSession}>
+              <button className="secondary-button" type="button" aria-label={`${session.status === 'running' ? 'Pause' : 'Resume'} ${flowName}`} title={`${session.status === 'running' ? 'Pause' : 'Resume'} ${flowName}`} onClick={session.status === 'running' ? pauseSession : resumeSession}>
                 {session.status === 'running'
                   ? <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5v14M15 5v14" /></svg>
                   : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 12 7-12 7z" /></svg>}
               </button>
             )}
-            <button className="secondary-button" type="button" aria-label={session.activeIndex === session.prompts.length - 1 ? 'Finish interview' : 'Next question'} title={session.activeIndex === session.prompts.length - 1 ? 'Finish interview' : 'Next question'} onClick={() => moveTo(session.activeIndex + 1)}>
+            <button className="secondary-button" type="button" aria-label={session.activeIndex === session.prompts.length - 1 ? `Finish ${flowName}` : 'Next question'} title={session.activeIndex === session.prompts.length - 1 ? `Finish ${flowName}` : 'Next question'} onClick={() => moveTo(session.activeIndex + 1)}>
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9.5 5 7 7-7 7" /></svg>
             </button>
-            <button className="mobile-interview-end-icon" type="button" aria-label="End interview and view recap" title="End interview and view recap" onClick={finishSessionEarly}>
+            <button className="mobile-interview-end-icon" type="button" aria-label={`End ${flowName} and view recap`} title={`End ${flowName} and view recap`} onClick={finishSessionEarly}>
               <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
             </button>
           </div>
@@ -1061,9 +1768,9 @@ export default function MobileInterview() {
         {feedback && !codingActive && (
           <div className={`mobile-interview-feedback-overlay ${feedback.result}`} role="dialog" aria-modal="true" aria-labelledby="mobile-feedback-title">
             <section className="mobile-interview-feedback-card">
-              <span className="mobile-interview-feedback-icon" aria-hidden="true">{feedback.result === 'correct' ? '✓' : feedback.result === 'incorrect' ? '↻' : '✓'}</span>
-              <p className="mobile-interview-kicker">{feedback.result === 'submitted' ? 'Response saved' : 'Answer checked'}</p>
-              <h2 id="mobile-feedback-title">{feedback.result === 'correct' ? 'Correct!' : feedback.result === 'incorrect' ? 'Keep practicing' : 'Answer submitted'}</h2>
+              <span className="mobile-interview-feedback-icon" aria-hidden="true">{feedback.result === 'correct' ? '✓' : feedback.result === 'incorrect' ? '↻' : feedback.result === 'skipped' ? '↷' : '✓'}</span>
+              <p className="mobile-interview-kicker">{feedback.result === 'skipped' ? 'Skipped · no answer entered' : feedback.result === 'submitted' ? 'Response saved' : 'Answer checked'}</p>
+              <h2 id="mobile-feedback-title">{feedback.result === 'correct' ? 'Correct!' : feedback.result === 'incorrect' ? 'Keep practicing' : feedback.result === 'skipped' ? 'Question skipped' : 'Answer submitted'}</h2>
               {currentPrompt.explanation && <p>{currentPrompt.explanation}</p>}
               {feedback.reveal && (
                 <div className="mobile-interview-feedback-source">
@@ -1085,15 +1792,18 @@ export default function MobileInterview() {
               }}>
                 {feedback.reveal ? 'Hide answer' : 'View answer'}
               </button>
-              {feedback.reveal && currentPrompt.kind !== 'mcq' && currentPrompt.kind !== 'coding' && (
+              {(feedback.result !== 'skipped' && (feedback.reveal || ((session.mode === 'learn' || session.mode === 'revision') && feedback.result === 'submitted')))
+                && currentPrompt.kind !== 'mcq' && currentPrompt.kind !== 'coding' && (
                 <div className="mobile-interview-self-assessment" role="group" aria-label="Assess your answer">
                   <span>{feedback.result === 'submitted' ? 'How did you do?' : 'Your assessment'}</span>
                   <button type="button" className={feedback.result === 'correct' ? 'is-selected' : ''} aria-pressed={feedback.result === 'correct'} onClick={() => assessShortAnswer('correct')}>Correct</button>
-                  <button type="button" className={feedback.result === 'incorrect' ? 'is-selected' : ''} aria-pressed={feedback.result === 'incorrect'} onClick={() => assessShortAnswer('incorrect')}>Not yet</button>
+                  <button type="button" className={feedback.result === 'incorrect' ? 'is-selected' : ''} aria-pressed={feedback.result === 'incorrect'} onClick={() => assessShortAnswer('incorrect')}>{session.mode === 'revision' ? 'Needs review' : 'Not yet'}</button>
                 </div>
               )}
               <button className="primary-button mobile-interview-primary" type="button" onClick={continueAfterFeedback}>
-                {session.activeIndex === session.prompts.length - 1 ? 'Finish interview' : 'Next question'}
+                {session.mode === 'revision' && feedback.result === 'submitted'
+                  ? session.activeIndex === session.prompts.length - 1 ? 'Skip rating & finish revision' : 'Skip rating & continue'
+                  : session.activeIndex === session.prompts.length - 1 ? `Finish ${flowName}` : 'Next question'}
               </button>
             </section>
           </div>
@@ -1148,6 +1858,43 @@ export default function MobileInterview() {
       {renderHistoryDialog()}
     </section>
   );
+}
+
+function HistoryModeFilter({
+  value,
+  onChange,
+}: {
+  value: 'all' | 'interview' | 'learn' | 'revision';
+  onChange: (value: 'all' | 'interview' | 'learn' | 'revision') => void;
+}) {
+  return <div className="mobile-interview-mode-filter" role="group" aria-label="Filter history">
+    {(['all', 'interview', 'learn', 'revision'] as const).map((filter) => <button
+      type="button"
+      key={filter}
+      className={value === filter ? 'active' : ''}
+      aria-pressed={value === filter}
+      onClick={() => onChange(filter)}
+    >{filter === 'all' ? 'All' : filter === 'learn' ? 'Learn' : filter === 'revision' ? 'Revision' : 'Interview'}</button>)}
+  </div>;
+}
+
+function getLearnStageLabel(stageId?: string): string {
+  if (!stageId) return 'Quiz';
+  if (stageId.includes(':mistakes:')) return 'Mistakes';
+  return `Stage ${stageId.split(':stage-').pop() ?? ''}`;
+}
+
+function revisionPriorityLabel(priority: RevisionPriority): string {
+  return priority === 2 ? 'Must-know' : priority === 1 ? 'Important' : 'Normal';
+}
+
+function revisionReasonLabel(reason: RevisionPickReason): string {
+  return reason === 'filler' || reason === 'rest' ? 'REST' : reason.toUpperCase();
+}
+
+function toLocalDateInput(timestamp: number): string {
+  const date = new Date(timestamp);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
 function TimeWheelPicker({

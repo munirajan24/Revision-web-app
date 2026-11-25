@@ -89,8 +89,76 @@ describe('Complete Revision HTML question bank', () => {
     const imageAnswers = interviewQuestions.filter((question) => question.answerHtml?.includes('/interview-source-image/'));
     expect(imageAnswers.length).toBeGreaterThan(0);
     for (const question of imageAnswers) {
-      expect(renderToStaticMarkup(createElement(QuestionAnswer, { question }))).not.toContain('interview-source-image');
+      const expectedImageCount = question.answerHtml?.match(/<img\b/gi)?.length ?? 0;
+      const rendered = renderToStaticMarkup(createElement(QuestionAnswer, { question }));
+      expect(rendered).not.toContain('interview-source-image');
+      expect(rendered).not.toContain('question-answer-image-missing');
+      expect(rendered.match(/<img\b/gi) ?? []).toHaveLength(expectedImageCount);
     }
+  });
+
+  it('renders a readable fallback when a referenced answer image is unavailable', () => {
+    const question = {
+      id: 'missing-image-test',
+      categoryId: 'general' as const,
+      category: 'General',
+      section: 'Programming',
+      prompt: 'What does this diagram show?',
+      answerMarkdown: '',
+      answerHtml: '<p>Diagram:</p><img src="/interview-source-image/image999.png" alt="Example diagram">',
+      hasAnswer: true,
+      hasAddedAnswer: false,
+      hasAdditionalNotes: false,
+    };
+
+    const rendered = renderToStaticMarkup(createElement(QuestionAnswer, { question }));
+
+    expect(rendered).toContain('question-answer-image-missing');
+    expect(rendered).toContain('Image unavailable: image999.png');
+    expect(rendered).not.toContain('/interview-source-image/');
+  });
+
+  it('resolves a source image when its referenced extension differs from the asset', () => {
+    const question = {
+      id: 'mismatched-image-extension-test',
+      categoryId: 'general' as const,
+      category: 'General',
+      section: 'Programming',
+      prompt: 'What does this diagram show?',
+      answerMarkdown: '',
+      answerHtml: "<img alt='Chain diagram' src='/interview-source-image/image30.png'>",
+      hasAnswer: true,
+      hasAddedAnswer: false,
+      hasAdditionalNotes: false,
+    };
+
+    const rendered = renderToStaticMarkup(createElement(QuestionAnswer, { question }));
+
+    expect(rendered).toContain('<img');
+    expect(rendered).toContain("alt='Chain diagram'");
+    expect(rendered).not.toContain('question-answer-image-missing');
+    expect(rendered).not.toContain('/interview-source-image/');
+  });
+
+  it('resolves Markdown source images with alternate extensions', () => {
+    const question = {
+      id: 'markdown-image-extension-test',
+      categoryId: 'general' as const,
+      category: 'General',
+      section: 'Programming',
+      prompt: 'What does this diagram show?',
+      answerMarkdown: '![Coroutine diagram](/interview-source-image/image59.jpg)',
+      hasAnswer: true,
+      hasAddedAnswer: false,
+      hasAdditionalNotes: false,
+    };
+
+    const rendered = renderToStaticMarkup(createElement(QuestionAnswer, { question }));
+
+    expect(rendered).toContain('<img');
+    expect(rendered).toContain('alt="Coroutine diagram"');
+    expect(rendered).not.toContain('question-answer-image-missing');
+    expect(rendered).not.toContain('/interview-source-image/');
   });
 
   it('formats all source monospace classes as highlighted code blocks', () => {

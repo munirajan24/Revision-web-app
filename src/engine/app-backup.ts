@@ -3,6 +3,7 @@ import { isCalendarDate, type ChecklistItem, type ChecklistSection, type Intervi
 import { isJobApplicationStore, JOB_APPLICATION_PLATFORMS, type JobApplicationDay, type JobApplicationStore } from './job-applications';
 import { createProgressBackup, mergeProgressRecords, parseProgressBackup, replaceProgressRecords, type ImportedProgressBackup, type ProgressBackupState } from './progress-transfer';
 import { mergeMobileInterviewBackups, parseMobileInterviewBackup, type MobileInterviewBackup } from './mobile-interview';
+import { emptySmartRevisionData } from './smart-revision';
 
 export interface AppBackupState {
   coding: ProgressBackupState;
@@ -41,7 +42,10 @@ export function createAppBackup(state: AppBackupState, exportedAt = new Date().t
     completeRevisionProgress: state.completeRevisionProgress,
     interviews: state.interviews,
     jobApplications: state.jobApplications,
-    mobileInterview: state.mobileInterview,
+    mobileInterview: {
+      ...state.mobileInterview,
+      revision: state.mobileInterview.revision ?? emptySmartRevisionData(Date.parse(exportedAt)),
+    },
   };
 }
 
